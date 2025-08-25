@@ -40,6 +40,10 @@ WEB_API_URL = os.getenv('WEB_API_URL', 'http://localhost/v1')
 WORKFLOW_API_URL = os.getenv('WORKFLOW_API_URL', 'http://localhost/v1')
 FILES_URL = os.getenv('FILES_URL', 'http://localhost')
 
+# Plugin Daemon Configuration
+PLUGIN_DAEMON_URL = os.getenv('PLUGIN_DAEMON_URL', 'http://localhost:5002')
+PLUGIN_DAEMON_ENABLED = os.getenv('PLUGIN_DAEMON_ENABLED', 'true').lower() == 'true'
+
 # Drass Specific Configuration
 DIFY_API_KEY = os.getenv('DIFY_API_KEY', '')
 DIFY_WORKSPACE_ID = os.getenv('DIFY_WORKSPACE_ID', '')

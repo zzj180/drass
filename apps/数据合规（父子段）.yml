@@ -86,19 +86,33 @@ model_config:
     - .MOV
     - .MPEG
     - .WEBM
+    - .PDF
+    - .DOC
+    - .DOCX
+    - .XLS
+    - .XLSX
+    - .PPT
+    - .PPTX
+    - .TXT
+    - .CSV
+    - .JSON
+    - .XML
+    - .ZIP
+    - .RAR
+    - .7Z
     allowed_file_types: []
     allowed_file_upload_methods:
     - remote_url
     - local_file
-    enabled: false
+    enabled: true
     image:
       detail: high
-      enabled: false
-      number_limits: 3
+      enabled: true
+      number_limits: 5
       transfer_methods:
       - remote_url
       - local_file
-    number_limits: 3
+    number_limits: 10
   model:
     completion_params:
       stop: []
@@ -123,7 +137,13 @@ model_config:
     专业领域\n《数据安全法》\n《个人信息保护法》\n《网络安全法》\nGDPR欧盟通用数据保护条例\n行业数据安全标准\n企业内部数据治理政策\n工作原则\n\
     1.\n准确性优先：所有回答必须基于知识库中的权威信息\n2.\n合规性保障：确保建议符合相关法律法规要求\n3.\n实用性导向：提供可操作的具体指导方案\n\
     4.\n风险意识：主动识别并提醒潜在合规风险\n5.\n保密原则：严格保护企业敏感信息\n6.\n知识库依赖：严格仅使用企业内部合规知识库的数据内容，不得引用外部信息\n\
-    7.\n内容完整性：确保回答内容详尽全面，字数必须达到5000字以上\n8.\n格式规范：所有回答必须使用美化的Markdown格式进行渲染\n回答格式要求\n\
+    7.\n内容完整性：确保回答内容详尽全面，字数必须达到5000字以上\n8.\n格式规范：所有回答必须使用美化的Markdown格式进行渲染\n9.\n附件处理：根据用户上传的附件内容和选择的目的进行相应处理\n\
+    \n附件处理说明\n当用户上传附件时，请根据以下规则处理：\n\
+    - 如果目的选择'更新知识库'：分析附件内容，提取合规相关信息，提供知识库更新建议\n\
+    - 如果目的选择'生成合规方案/审计报告'：基于附件内容，结合知识库信息，生成详细的合规分析报告\n\
+    - 附件内容分析：仔细阅读和分析上传的文档内容，提取关键合规信息\n\
+    - 结合知识库：将附件内容与现有知识库信息进行对比分析，识别差异和更新点\n\
+    \n回答格式要求\n\
     \U0001F4CB Markdown渲染规范\n所有回答必须严格按照以下Markdown格式进行美化渲染：\n\nMarkdown\n# 主标题（使用H1）\n\
     ## 二级标题（使用H2）\n### 三级标题（使用H3）\n#### 四级标题（使用H4）\n\n**粗体文本**用于强调重点\n*斜体文本*用于标注术语\n\
     `代码块`用于技术术语\n\n> 引用块用于重要法规条文\n\n- 无序列表项目1\n- 无序列表项目2\n  - 子列表项目\n\n1. 有序列表项目1\n\
@@ -173,5 +193,42 @@ model_config:
     enabled: false
     language: ''
     voice: ''
-  user_input_form: []
+  user_input_form:
+  - label: 附件上传
+    name: file_upload
+    type: file
+    required: false
+    help: 请上传需要分析的合规相关文档或资料
+    max_files: 5
+    allowed_file_types:
+    - .PDF
+    - .DOC
+    - .DOCX
+    - .XLS
+    - .XLSX
+    - .PPT
+    - .PPTX
+    - .TXT
+    - .CSV
+    - .JSON
+    - .XML
+    - .ZIP
+    - .RAR
+    - .7Z
+  - label: 附件处理目的
+    name: file_purpose
+    type: select
+    required: true
+    help: 请选择上传附件的处理目的
+    options:
+    - label: 更新知识库
+      value: update_knowledge_base
+    - label: 生成合规方案/审计报告
+      value: generate_compliance_report
+  - label: 业务场景描述
+    name: business_scenario
+    type: textarea
+    required: false
+    help: 请简要描述您的业务场景和合规需求
+    placeholder: 例如：我需要分析某个业务场景的合规风险，或者需要更新某个领域的合规知识库...
 version: 0.3.0

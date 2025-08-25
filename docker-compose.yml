@@ -33,7 +33,9 @@ services:
       - OPENDAL_ROOT=/app/api/storage
       - STORAGE_TYPE=local
       - STORAGE_LOCAL_PATH=/app/api/storage
-      - PLUGIN_DAEMON_URL=http://plugin_daemon:5002
+      - PLUGIN_DAEMON_URL=http://localhost:5002
+      - PLUGIN_DAEMON_ENABLED=false
+      - PLUGIN_ENABLED=false
     volumes:
       - ./data/api:/app/api/storage
       - ./config/dify:/app/api/config
@@ -41,7 +43,6 @@ services:
       - db
       - redis
       - weaviate
-      - plugin_daemon
     networks:
       - drass-network
     healthcheck:
@@ -204,27 +205,42 @@ services:
       - drass-network
 
   # Dify Plugin Daemon Service
-  plugin_daemon:
-    image: langgenius/dify-plugin-daemon:latest
-    container_name: drass-plugin-daemon
+  # plugin_daemon:
+  #   image: langgenius/dify-plugin-daemon:latest
+  #   container_name: drass-plugin-daemon
+  #   restart: unless-stopped
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+  #     - REDIS_DB=2
+  #     - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+  #   volumes:
+  #     - ./data/plugin:/app/plugin/storage
+  #   depends_on:
+  #     - redis
+  #   networks:
+  #     - drass-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  # Simple HTTP service to respond to plugin daemon requests
+  plugin_daemon_mock:
+    image: nginx:alpine
+    container_name: drass-plugin-daemon-mock
     restart: unless-stopped
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - REDIS_DB=2
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+    expose:
+      - "80"
     volumes:
-      - ./data/plugin:/app/plugin/storage
-    depends_on:
-      - redis
+      - ./nginx/plugin-mock.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
-      - drass-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      drass-network:
+        aliases:
+          - plugin_daemon
+    hostname: plugin_daemon
 
   # Monitoring and logging
   prometheus:
