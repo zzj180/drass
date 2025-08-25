@@ -1,0 +1,79 @@
+# Data Regulation Assistant Application Configuration
+# This file defines the Dify application for data regulation assistance
+
+application:
+  name: "Data Regulation Assistant"
+  description: "AI-powered assistant for data regulation compliance and guidance"
+  version: "1.0.0"
+  category: "compliance"
+  tags:
+    - "data-regulation"
+    - "compliance"
+    - "legal"
+    - "ai-assistant"
+
+# Application Settings
+settings:
+  language: "en"
+  timezone: "UTC"
+  default_model: "gpt-4"
+  max_tokens: 4000
+  temperature: 0.7
+  
+# Workflow Configuration
+workflow:
+  name: "Data Regulation Compliance Workflow"
+  description: "Main workflow for handling data regulation queries"
+  steps:
+    - name: "query_analysis"
+      type: "llm"
+      description: "Analyze user query for regulation type"
+      
+    - name: "regulation_lookup"
+      type: "tool"
+      description: "Look up relevant regulations"
+      
+    - name: "compliance_check"
+      type: "llm"
+      description: "Check compliance requirements"
+      
+    - name: "recommendation_generation"
+      type: "llm"
+      description: "Generate compliance recommendations"
+
+# Knowledge Base Configuration
+knowledge_base:
+  name: "Data Regulation Knowledge Base"
+  description: "Comprehensive knowledge base for data regulations"
+  sources:
+    - "gdpr"
+    - "ccpa"
+    - "hipaa"
+    - "sox"
+    - "industry_standards"
+  
+# API Configuration
+api:
+  endpoints:
+    - path: "/query"
+      method: "POST"
+      description: "Submit data regulation query"
+      
+    - path: "/compliance-check"
+      method: "POST"
+      description: "Check compliance for specific scenario"
+      
+    - path: "/regulations"
+      method: "GET"
+      description: "List available regulations"
+      
+# Security and Compliance
+security:
+  data_retention_days: 90
+  audit_logging: true
+  encryption: true
+  access_control:
+    - role: "user"
+      permissions: ["query", "read"]
+    - role: "admin"
+      permissions: ["query", "read", "write", "delete"]

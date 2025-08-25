@@ -1,0 +1,23 @@
+# Dify Project Dependencies
+# Core dependencies for configuration management and deployment
+
+# YAML processing
+PyYAML>=6.0
+
+# HTTP requests for API calls
+requests>=2.28.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Configuration validation
+jsonschema>=4.17.0
+
+# CLI argument parsing (built-in with Python 3.7+)
+# argparse
+
+# Path handling (built-in with Python 3.7+)
+# pathlib
+
+# Type hints (built-in with Python 3.7+)
+# typing

@@ -1,0 +1,44 @@
+# Production Environment Configuration
+environment: "production"
+
+# Dify Platform Settings
+dify:
+  platform_url: "${DIFY_PRODUCTION_URL}"
+  api_key: "${DIFY_PRODUCTION_API_KEY}"
+  workspace_id: "${DIFY_PRODUCTION_WORKSPACE_ID}"
+  
+# Application Configuration
+app:
+  debug: false
+  log_level: "WARNING"
+  auto_reload: false
+  
+# Database Configuration
+database:
+  host: "${DB_HOST}"
+  port: 5432
+  name: "${DB_NAME}"
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  ssl_mode: "require"
+  
+# External Services
+services:
+  redis:
+    host: "${REDIS_HOST}"
+    port: 6379
+    password: "${REDIS_PASSWORD}"
+    ssl: true
+  
+# Feature Flags
+features:
+  experimental_features: false
+  beta_apis: false
+  mock_external_services: false
+  
+# Security Settings
+security:
+  cors_origins: ["${ALLOWED_ORIGINS}"]
+  rate_limiting:
+    requests_per_minute: 1000
+    burst_limit: 200

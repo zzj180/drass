@@ -1,0 +1,60 @@
+# Basic Dify Application Template
+# Use this template as a starting point for new applications
+
+application:
+  name: "{{APP_NAME}}"
+  description: "{{APP_DESCRIPTION}}"
+  version: "1.0.0"
+  category: "{{APP_CATEGORY}}"
+  tags: []
+
+# Application Settings
+settings:
+  language: "en"
+  timezone: "UTC"
+  default_model: "gpt-4"
+  max_tokens: 2000
+  temperature: 0.7
+  
+# Workflow Configuration
+workflow:
+  name: "{{WORKFLOW_NAME}}"
+  description: "{{WORKFLOW_DESCRIPTION}}"
+  steps:
+    - name: "input_processing"
+      type: "llm"
+      description: "Process user input"
+      
+    - name: "task_execution"
+      type: "llm"
+      description: "Execute main task"
+      
+    - name: "response_generation"
+      type: "llm"
+      description: "Generate response"
+
+# Knowledge Base Configuration
+knowledge_base:
+  name: "{{KB_NAME}}"
+  description: "{{KB_DESCRIPTION}}"
+  sources: []
+
+# API Configuration
+api:
+  endpoints:
+    - path: "/query"
+      method: "POST"
+      description: "Main query endpoint"
+      
+    - path: "/health"
+      method: "GET"
+      description: "Health check endpoint"
+      
+# Security and Compliance
+security:
+  data_retention_days: 30
+  audit_logging: false
+  encryption: true
+  access_control:
+    - role: "user"
+      permissions: ["query", "read"]

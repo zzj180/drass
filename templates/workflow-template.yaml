@@ -1,0 +1,109 @@
+# Dify Workflow Template
+# Use this template to define application workflows
+
+workflow:
+  name: "{{WORKFLOW_NAME}}"
+  description: "{{WORKFLOW_DESCRIPTION}}"
+  version: "1.0.0"
+  enabled: true
+  
+# Workflow Steps
+steps:
+  - id: "step_1"
+    name: "input_validation"
+    type: "validation"
+    description: "Validate user input"
+    config:
+      required_fields: ["query", "context"]
+      validation_rules:
+        - rule: "min_length"
+          value: 10
+        - rule: "max_length"
+          value: 1000
+    
+  - id: "step_2"
+    name: "context_analysis"
+    type: "llm"
+    description: "Analyze user context and requirements"
+    config:
+      model: "gpt-4"
+      max_tokens: 1000
+      temperature: 0.3
+      prompt_template: |
+        Analyze the following user query and context:
+        Query: {{query}}
+        Context: {{context}}
+        
+        Provide a structured analysis including:
+        1. Query type
+        2. Required information
+        3. Potential challenges
+    
+  - id: "step_3"
+    name: "information_gathering"
+    type: "tool"
+    description: "Gather relevant information"
+    config:
+      tool_name: "{{TOOL_NAME}}"
+      parameters:
+        search_query: "{{search_query}}"
+        max_results: 5
+    
+  - id: "step_4"
+    name: "response_generation"
+    type: "llm"
+    description: "Generate comprehensive response"
+    config:
+      model: "gpt-4"
+      max_tokens: 2000
+      temperature: 0.7
+      prompt_template: |
+        Based on the analysis and gathered information, provide a comprehensive response to:
+        {{query}}
+        
+        Include:
+        1. Direct answer
+        2. Supporting information
+        3. Recommendations
+        4. Next steps
+
+# Workflow Connections
+connections:
+  - from: "step_1"
+    to: "step_2"
+    condition: "success"
+  
+  - from: "step_2"
+    to: "step_3"
+    condition: "success"
+  
+  - from: "step_3"
+    to: "step_4"
+    condition: "success"
+  
+  - from: "step_1"
+    to: "error_handler"
+    condition: "failure"
+  
+  - from: "step_2"
+    to: "error_handler"
+    condition: "failure"
+  
+  - from: "step_3"
+    to: "error_handler"
+    condition: "failure"
+
+# Error Handling
+error_handler:
+  - id: "error_handler"
+    name: "error_handling"
+    type: "llm"
+    description: "Handle errors gracefully"
+    config:
+      model: "gpt-4"
+      max_tokens: 500
+      temperature: 0.1
+      prompt_template: |
+        An error occurred in the workflow. Please provide a helpful error message to the user.
+        Error: {{error_message}}
+        Step: {{failed_step}}

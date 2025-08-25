@@ -1,0 +1,35 @@
+# Development Environment Configuration
+environment: "development"
+
+# Dify Platform Settings
+dify:
+  platform_url: "http://localhost:5001"
+  api_key: "dev-api-key"
+  workspace_id: "dev-workspace"
+  
+# Application Configuration
+app:
+  debug: true
+  log_level: "DEBUG"
+  auto_reload: true
+  
+# Database Configuration
+database:
+  host: "localhost"
+  port: 5432
+  name: "dify_dev"
+  user: "dify_user"
+  password: "dev_password"
+  
+# External Services
+services:
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+  
+# Feature Flags
+features:
+  experimental_features: true
+  beta_apis: true
+  mock_external_services: true
