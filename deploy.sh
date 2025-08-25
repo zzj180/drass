@@ -89,14 +89,14 @@ mkdir -p nginx/ssl
 # Check if .env file exists
 if [ ! -f ".env" ]; then
     print_status "Creating environment configuration..."
-    python3 scripts/dify-deploy.py --config config/dify-config.yaml
+    source venv/bin/activate && python scripts/dify-deploy.py --config config/dify-config.yaml
 else
     print_warning ".env file already exists. Using existing configuration."
 fi
 
 # Deploy Dify platform
 print_status "Deploying Dify platform..."
-if python3 scripts/dify-deploy.py --config config/dify-config.yaml; then
+if source venv/bin/activate && python scripts/dify-deploy.py --config config/dify-config.yaml; then
     print_success "Dify platform deployment completed!"
 else
     print_error "Dify platform deployment failed!"
