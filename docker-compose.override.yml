@@ -21,6 +21,11 @@ services:
     stdin_open: true
     tty: true
 
+  # Web service with exposed port
+  web:
+    ports:
+      - "3000:3000"  # Expose web port for development
+
   # Development database with exposed ports
   db:
     ports:
