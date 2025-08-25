@@ -33,6 +33,7 @@ services:
       - OPENDAL_ROOT=/app/api/storage
       - STORAGE_TYPE=local
       - STORAGE_LOCAL_PATH=/app/api/storage
+      - PLUGIN_DAEMON_URL=http://plugin_daemon:5002
     volumes:
       - ./data/api:/app/api/storage
       - ./config/dify:/app/api/config
@@ -40,6 +41,7 @@ services:
       - db
       - redis
       - weaviate
+      - plugin_daemon
     networks:
       - drass-network
     healthcheck:
@@ -200,6 +202,29 @@ services:
       - redis
     networks:
       - drass-network
+
+  # Dify Plugin Daemon Service
+  plugin_daemon:
+    image: langgenius/dify-plugin-daemon:latest
+    container_name: drass-plugin-daemon
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=2
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+    volumes:
+      - ./data/plugin:/app/plugin/storage
+    depends_on:
+      - redis
+    networks:
+      - drass-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Monitoring and logging
   prometheus:
