@@ -20,7 +20,7 @@ class DifyDeployer:
     def __init__(self, config_path: str = "config/dify-config.yaml"):
         self.config_path = config_path
         self.dify_url = "http://localhost"
-        self.api_url = f"{self.dify_url}/v1"
+        self.api_url = f"{self.dify_url}/console/api"
         self.admin_email = os.getenv("DIFY_ADMIN_EMAIL", "admin@drass.local")
         self.admin_password = os.getenv("DIFY_ADMIN_PASSWORD", "admin123")
         
