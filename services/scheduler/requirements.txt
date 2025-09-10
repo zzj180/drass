@@ -1,0 +1,17 @@
+# 调度框架
+apscheduler==3.10.4
+
+# HTTP请求
+requests==2.31.0
+
+# 环境变量
+python-dotenv==1.0.0
+
+# 日志
+loguru==0.7.2
+
+# 时间处理
+python-dateutil==2.8.2
+
+# 配置管理
+pyyaml==6.0.1

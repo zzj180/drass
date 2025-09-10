@@ -13,6 +13,27 @@ python-dotenv>=1.0.0
 # Configuration validation
 jsonschema>=4.17.0
 
+# Figma API integration
+figma-api>=1.0.0
+
+# GitHub API integration
+PyGithub>=1.59.0
+
+# Image processing for UI analysis
+Pillow>=9.0.0
+
+# HTML parsing for component analysis
+beautifulsoup4>=4.11.0
+
+# CLI framework
+click>=8.0.0
+
+# Rich terminal output
+rich>=13.0.0
+
+# Flask for webhook server
+Flask>=2.3.0
+
 # CLI argument parsing (built-in with Python 3.7+)
 # argparse
 

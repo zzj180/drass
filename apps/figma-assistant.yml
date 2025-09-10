@@ -1,0 +1,107 @@
+name: "Figma UI开发助手"
+description: "通过Figma API获取设计文件，拆解UI页面，生成开发需求backlog并创建GitHub Issue"
+version: "1.0.0"
+type: "assistant"
+
+# 应用配置
+app_config:
+  model:
+    provider: "openai"
+    name: "gpt-4"
+    parameters:
+      temperature: 0.7
+      max_tokens: 4000
+  
+  prompt_template: |
+    你是一个专业的UI开发助手，负责分析Figma设计文件并生成开发需求。
+    
+    请根据提供的Figma设计信息，完成以下任务：
+    
+    1. 分析设计文件的整体结构和页面布局
+    2. 识别每个UI页面的主要组件和功能
+    3. 生成详细的开发需求描述
+    4. 创建GitHub Issue格式的任务清单
+    
+    设计信息：
+    {figma_data}
+    
+    请按照以下格式输出：
+    
+    ## 设计分析总结
+    [总体设计风格和布局分析]
+    
+    ## 页面拆解
+    [每个页面的详细分析]
+    
+    ## 开发需求Backlog
+    [具体的开发任务列表]
+    
+    ## GitHub Issue模板
+    [可直接使用的Issue内容]
+
+# 工作流配置
+workflow:
+  - name: "获取Figma文件"
+    type: "api_call"
+    config:
+      api: "figma"
+      endpoint: "get_file"
+      parameters:
+        file_key: "{file_key}"
+  
+  - name: "分析UI结构"
+    type: "processing"
+    config:
+      algorithm: "ui_analysis"
+      output_format: "structured_data"
+  
+  - name: "生成开发需求"
+    type: "llm_processing"
+    config:
+      model: "gpt-4"
+      prompt: "ui_analysis_prompt"
+  
+  - name: "创建GitHub Issue"
+    type: "api_call"
+    config:
+      api: "github"
+      endpoint: "create_issue"
+      parameters:
+        repository: "{repo_name}"
+        title: "UI开发需求: {page_name}"
+        body: "{issue_content}"
+
+# API配置
+apis:
+  figma:
+    base_url: "https://api.figma.com/v1"
+    auth_type: "bearer_token"
+    required_headers:
+      - "X-Figma-Token"
+  
+  github:
+    base_url: "https://api.github.com"
+    auth_type: "personal_access_token"
+    required_headers:
+      - "Authorization"
+      - "Accept: application/vnd.github.v3+json"
+
+# 环境变量配置
+environment_variables:
+  - FIGMA_ACCESS_TOKEN
+  - GITHUB_TOKEN
+  - GITHUB_REPOSITORY
+  - GITHUB_OWNER
+
+# 输出配置
+output:
+  format: "markdown"
+  include_screenshots: true
+  include_component_details: true
+  issue_template: "standard"
+
+
+
+
+
+

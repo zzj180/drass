@@ -1,0 +1,26 @@
+# Embedding Service Requirements
+
+# Core dependencies
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-dotenv==1.0.0
+numpy==1.24.3
+
+# Embedding providers (install based on your choice)
+
+# Option 1: Sentence Transformers (Recommended for local deployment)
+sentence-transformers==2.2.2
+torch>=2.0.0  # CPU version
+# For GPU support, install: pip install torch --index-url https://download.pytorch.org/whl/cu118
+
+# Option 2: OpenAI embeddings
+openai==1.6.1
+
+# Option 3: Cohere embeddings  
+cohere==4.39.0
+
+# Utilities
+redis==5.0.1  # For caching
+httpx==0.25.2  # For async HTTP requests
+tenacity==8.2.3  # For retry logic
