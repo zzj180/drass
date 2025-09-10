@@ -206,3 +206,12 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 frontend/node_modules/
+services/embedding-service/models/
+services/embedding-service/venv/
+services/embedding-service/.env
+mlx_qwen3_converted/
+models/
+local_model_qwen3/
+.env.qwen3-mlx
+*.DS_Store
+.DS_Store

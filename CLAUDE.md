@@ -12,6 +12,17 @@ Drass is a hybrid Dify + LangChain compliance assistant platform that combines:
 
 ## Development Commands
 
+### Local LLM Model Setup (Qwen3-8B with MLX)
+```bash
+# Convert and run Qwen3-8B model
+mlx_lm.convert --hf-path local_model_qwen3 --mlx-path mlx_qwen3_converted --dtype bfloat16
+python qwen3_api_server.py  # Start API server on port 8001
+
+# Alternative: Use Ollama for model serving
+ollama serve                # Start Ollama service
+ollama pull qwen2.5:7b      # Download model (if needed)
+```
+
 ### Frontend (React + TypeScript)
 ```bash
 cd frontend
@@ -135,6 +146,7 @@ npm test -- --run                           # Run tests once (CI mode)
 
 **Environment Variables** (set in `.env` or system):
 - **LLM Configuration**: `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `OPENROUTER_API_KEY`
+  - For local Qwen3-8B: `OPENAI_API_BASE=http://localhost:8001/v1`, `LLM_MODEL=qwen3-8b-mlx`
 - **Vector Store**: `VECTOR_STORE_TYPE`, `VECTOR_STORE_HOST`, `CHROMA_PERSIST_DIRECTORY`
 - **Embeddings**: `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`
 - **Reranking**: `RERANKING_ENABLED`, `RERANKING_PROVIDER`, `RERANKING_API_KEY`
@@ -156,10 +168,15 @@ npm test -- --run                           # Run tests once (CI mode)
 4. **Agent System**: `services/main-app/app/agents/compliance_agent.py` - Agent orchestration
 5. **Frontend State**: `frontend/src/store/index.ts` - Redux store configuration
 6. **Docker Services**: `docker-compose.yml` - Complete service definitions
+7. **Local LLM Server**: `qwen3_api_server.py` - Flask API server for Qwen3-8B-MLX model
+8. **LLM Documentation**: `docs/LLM_API_CONFIG_GUIDE.md` - Detailed LLM setup instructions
 
 ### Integration Points
 
-- **OpenRouter**: External LLM gateway for multiple models
+- **LLM Providers**: 
+  - OpenRouter for cloud models
+  - Local Qwen3-8B-MLX via custom API server
+  - Ollama for local model management
 - **Vector Stores**: ChromaDB (default), Weaviate, Pinecone, Qdrant support
 - **Document Processing**: PDF, DOCX, XLSX, PPTX with OCR capabilities
 - **Reranking**: Optional Cohere reranking for improved retrieval accuracy
@@ -178,13 +195,16 @@ npm test -- --run                           # Run tests once (CI mode)
 - ✅ **Backend API**: Full FastAPI implementation with auth and middleware
 - ✅ **LangChain RAG**: Streaming-capable RAG chain with multi-query support
 - ✅ **Agent System**: Comprehensive tool set with specialized agents
-- 🚧 **Model Services**: Configuration ready, deployment pending
-- 📋 **Deployment**: Docker Compose ready, AWS infrastructure pending
+- ✅ **Local LLM**: Qwen3-8B-MLX model converted and API server implemented
+- 📋 **Deployment**: Docker Compose ready, AWS infrastructure documented in `AWS_DEPLOYMENT_RESOURCES.md`
 
 ### Common Development Workflows
 
-#### Starting the Full Stack
+#### Starting the Full Stack with Local LLM
 ```bash
+# Start local Qwen3-8B model server
+python qwen3_api_server.py  # Runs on port 8001
+
 # Start all Docker services (Dify, PostgreSQL, Redis, Weaviate)
 docker-compose up -d
 

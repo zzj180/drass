@@ -1,0 +1,16 @@
+# Modelfile for Qwen3-8B
+FROM ./mlx_qwen3_converted
+
+# Set parameters
+PARAMETER temperature 0.7
+PARAMETER top_p 0.95
+PARAMETER top_k 40
+PARAMETER num_ctx 4096
+
+# System prompt
+SYSTEM """You are Qwen, a helpful AI assistant."""
+
+# Template for chat
+TEMPLATE """{{ if .System }}System: {{ .System }}
+{{ end }}{{ if .Prompt }}User: {{ .Prompt }}
+{{ end }}Assistant: """

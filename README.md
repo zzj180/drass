@@ -22,9 +22,18 @@ drass/
 │   └── workflow-template.yaml     # Workflow template
 ├── scripts/                        # Automation and utility scripts
 │   ├── deploy.py                  # Deployment automation
-│   └── validate.py                # Configuration validation
-└── docs/                          # Documentation
-    └── TODO                       # Project tasks and progress
+│   ├── validate.py                # Configuration validation
+│   └── run_qwen3_mlx.sh          # Start local LLM service
+├── services/                       # Microservices
+│   └── embedding-service/         # Text embedding service
+│       ├── app.py                 # FastAPI application
+│       ├── requirements.txt       # Python dependencies
+│       └── .env                   # Service configuration
+├── docs/                          # Documentation
+│   ├── TODO                       # Project tasks and progress
+│   ├── EMBEDDING_SERVICE_DEPLOYMENT.md  # Embedding setup guide
+│   └── LOCAL_LLM_EMBEDDING_SETUP.md     # Local services setup
+└── qwen3_api_server.py            # Local LLM API server
 ```
 
 ## Features
@@ -35,6 +44,8 @@ drass/
 - **Automated Deployment**: Python scripts for deploying applications to Dify
 - **Configuration Validation**: Tools to validate YAML configuration files
 - **Security**: Environment variable support for sensitive configuration
+- **Local LLM Service**: Qwen3-8B-MLX model optimized for Apple Silicon (Port 8001)
+- **Embedding Service**: Local text embedding with sentence-transformers (Port 8002)
 
 ## Quick Start
 

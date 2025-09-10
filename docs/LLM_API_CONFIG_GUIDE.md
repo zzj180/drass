@@ -96,88 +96,174 @@ OpenRouter 提供统一的API访问多个LLM模型，包括Claude、GPT-4、Llam
    AZURE_OPENAI_API_VERSION=2024-02-01
    ```
 
-### 方案4: 本地大模型（免费，Apple Silicon优化）
+### 方案4: 本地大模型（免费）
 
-使用LM Studio部署MLX优化的本地模型服务，专为Apple Silicon Mac优化。
+多种本地部署方案，适合不同硬件和需求。
 
-#### LM Studio + MLX方式（推荐 - Apple Silicon最佳性能）：
+#### 方案4.1: MLX-LM Server（Apple Silicon最佳）
 
-LM Studio配合MLX优化模型，在Apple Silicon上提供最佳性能。
+专为Apple Silicon优化的MLX模型服务器，提供OpenAI兼容API。
 
-1. **安装LM Studio**
+1. **安装MLX-LM**
    ```bash
-   # macOS - 从官网下载
-   open https://lmstudio.ai
+   # 安装MLX-LM服务器
+   pip install mlx-lm
    
-   # 验证安装
-   ls -la "/Applications/LM Studio.app"
+   # 或使用部署脚本
+   ./scripts/deploy_mlx_server.sh
    ```
 
-2. **下载MLX优化模型**
-   ```bash
-   # 使用部署脚本
-   ./scripts/deploy_lmstudio_mlx.sh
-   ```
+2. **使用LM Studio下载的Qwen3-8B-MLX-bf16模型**
    
-   在LM Studio中搜索并下载：
-   - **mlx-community/Qwen3-8B-MLX-bf16** (推荐)
-   - 大小: ~8GB
-   - 精度: bfloat16
-   - 优化: Apple Silicon Metal GPU
-
-3. **启动LM Studio服务**
-   - 打开LM Studio应用
-   - 选择 Qwen3-8B-MLX-bf16 模型
-   - 进入 "Local Server" 标签
-   - 配置:
-     - Port: 1234
-     - Context Length: 32768
-     - GPU Layers: -1 (使用全部)
-   - 点击 "Start Server"
-
-4. **配置.env文件**
+   如果你已在LM Studio下载了Qwen3-8B-MLX-bf16：
    ```bash
-   LLM_PROVIDER=openai  # LM Studio使用OpenAI兼容API
-   LLM_MODEL=qwen3-8b-mlx-bf16
-   LLM_API_KEY=not-required
-   LLM_BASE_URL=http://localhost:1234/v1
+   # 直接使用本地模型启动服务器
+   ./scripts/run_qwen3_mlx.sh 8001
+   
+   # 或手动指定路径
+   mlx_lm.server \
+     --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-bf16 \
+     --host 0.0.0.0 \
+     --port 8001 \
+     --trust-remote-code
+   ```
+
+3. **启动服务器（在线模型）**
+   ```bash
+   # 方式1: 使用Qwen3-8B（会自动下载）
+   mlx_lm.server \
+     --model Qwen/Qwen2-7B-Instruct \
+     --host 0.0.0.0 \
+     --port 8001 \
+     --trust-remote-code
+   
+   # 方式2: 使用社区优化版本
+   mlx_lm.server \
+     --model mlx-community/Qwen2.5-7B-Instruct-4bit \
+     --host 0.0.0.0 \
+     --port 8001
+   ```
+
+4. **可用MLX模型**
+   ```
+   本地模型（LM Studio下载）：
+   - Qwen3-8B-MLX-bf16 (16GB, bfloat16精度，最高质量)
+     路径: ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-bf16
+   
+   在线模型（Hugging Face Hub）：
+   - Qwen/Qwen2-7B-Instruct (原版，需转换)
+   - mlx-community/Qwen2.5-7B-Instruct-4bit (4.3GB, 推荐)
+   - mlx-community/Qwen2.5-3B-Instruct-4bit (1.8GB, 更快)
+   - mlx-community/Qwen2.5-14B-Instruct-4bit (8.9GB, 更强)
+   ```
+
+5. **配置.env文件**
+   ```bash
+   # 使用Qwen3-8B-MLX-bf16的配置
+   LLM_PROVIDER=openai  # MLX-LM使用OpenAI兼容API
+   LLM_MODEL=Qwen3-8B-MLX-bf16
+   OPENAI_API_KEY=not-required
+   OPENAI_API_BASE=http://localhost:8001/v1
    MODEL_PRECISION=bfloat16
-   USE_MLX=true  # 启用MLX优化
-   ```
-
-5. **MLX模型优势**
-   ```
-   Apple Silicon优化：
-   - Metal GPU加速：充分利用M1/M2/M3芯片
-   - 内存效率：减少50%内存使用
-   - 推理速度：比CPU快5-10倍
-   - bf16精度：保持高质量输出
+   USE_MLX=true
    
-   推荐模型：
-   - Qwen3-8B-MLX-bf16: 8GB, 最佳质量
-   - Qwen3-8B-MLX-q8: 8.5GB, 8位量化
-   - Qwen3-8B-MLX-q4: 4.5GB, 更快但质量略低
+   # 或使用预配置文件
+   cp .env.qwen3-mlx .env
    ```
 
-#### 其他选项：
+6. **MLX优势**
+   ```
+   Apple Silicon原生优化：
+   - Metal GPU加速：5-10倍速度提升
+   - 统一内存架构：高效内存使用
+   - bfloat16精度：保持原始模型质量
+   - 流式输出：实时响应
+   
+   Qwen3-8B-MLX-bf16特点：
+   - 完整精度：bfloat16保持高质量输出
+   - 大上下文：支持32K token上下文
+   - 本地运行：无需网络，数据安全
+   ```
 
-**vLLM（高吞吐量服务器）**:
+#### 方案4.2: LM Studio（图形界面）
+
+如果MLX模型在LM Studio中遇到问题，建议使用GGUF格式：
+
+1. **下载GGUF模型**
+   在LM Studio搜索：
+   - Qwen2.5-7B-Instruct-GGUF (Q4_K_M: 4.9GB)
+   - Qwen2.5-3B-Instruct-GGUF (Q4_K_M: 2.0GB)
+
+2. **配置.env**
+   ```bash
+   LLM_PROVIDER=openai
+   LLM_MODEL=local-model
+   OPENAI_API_KEY=not-required
+   OPENAI_API_BASE=http://localhost:1234/v1
+   ```
+
+#### 方案4.3: vLLM（高性能服务器）
+
+适合NVIDIA GPU或需要高吞吐量的场景：
+
 ```bash
-# 适合NVIDIA GPU或大规模部署
+# 安装vLLM
 pip install vllm
+
+# 启动服务器
 python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen2.5-8B-Instruct \
-  --port 8001
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --port 8001 \
+  --max-model-len 8192
+
+# 配置.env
+LLM_PROVIDER=openai
+LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+OPENAI_API_KEY=not-required
+OPENAI_API_BASE=http://localhost:8001/v1
 ```
 
-**Ollama（简单但性能较低）**:
+#### 方案4.4: Ollama（最简单）
+
+最容易上手，但性能不如专门优化的方案：
+
 ```bash
 # 安装
-brew install ollama  # macOS
-# 启动
+brew install ollama
+
+# 启动服务
 ollama serve
+
 # 下载模型
 ollama pull qwen2.5:7b
+
+# 配置.env
+LLM_PROVIDER=ollama
+LLM_MODEL=qwen2.5:7b
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+#### 方案4.5: llama.cpp（轻量级）
+
+CPU友好，支持各种量化格式：
+
+```bash
+# 克隆并编译
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+make
+
+# 下载GGUF模型
+curl -L "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf" -o qwen2.5-7b.gguf
+
+# 启动服务器
+./llama-server -m qwen2.5-7b.gguf -c 8192 --port 8080
+
+# 配置.env
+LLM_PROVIDER=openai
+LLM_MODEL=local
+OPENAI_API_KEY=not-required
+OPENAI_API_BASE=http://localhost:8080/v1
 ```
 
 ## Apple Silicon优化建议

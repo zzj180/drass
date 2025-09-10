@@ -280,4 +280,4 @@ async def list_models():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("EMBEDDING_SERVICE_PORT", 8001))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=port)
