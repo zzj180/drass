@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import 'katex/dist/katex.min.css';
-import 'highlight.js/styles/github-dark.css';
+// Highlight.js styles handled by rehype-highlight
 
 interface MarkdownRendererProps {
   content: string;

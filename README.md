@@ -49,6 +49,23 @@ drass/
 
 ## Quick Start
 
+### 🚀 One-Click Startup (NEW!)
+
+For immediate testing with UI:
+
+```bash
+# Start all services with one command (LLM + Backend + Frontend)
+./start-simple.sh
+
+# Open browser and navigate to http://localhost:3000
+# Stop all services when done
+./stop-services.sh
+```
+
+For detailed startup options, see [One-Click Startup Guide](docs/ONE_CLICK_STARTUP_GUIDE.md).
+
+### Traditional Setup
+
 ### 1. Prerequisites
 
 - Python 3.7+

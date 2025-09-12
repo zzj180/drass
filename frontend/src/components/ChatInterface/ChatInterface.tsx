@@ -101,7 +101,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, []);
 
   // Handle sending messages
-  const handleSendMessage = useCallback((content: string) => {
+  const handleSendMessage = useCallback(async (content: string) => {
     // Add user message
     const userMessage: Message = {
       id: uuidv4(),
@@ -114,19 +114,44 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     
-    // Simulate API response (TODO: Replace with actual API call)
-    setTimeout(() => {
+    // Make API call to backend
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: content }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
       const assistantMessage: Message = {
         id: uuidv4(),
         role: 'assistant',
-        content: `I received your message: "${content}". This is a simulated response.`,
+        content: data.response || 'No response from assistant',
         timestamp: new Date(),
         status: 'sent',
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage: Message = {
+        id: uuidv4(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        timestamp: new Date(),
+        status: 'error',
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   }, []);
 
   // Handle file attachment
