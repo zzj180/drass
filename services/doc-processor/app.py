@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-文档处理服务 - 将各种格式文档转换为Markdown
-支持PDF、Word、Excel、PPT、图片等格式
+Document processing service - Convert various formats to Markdown
+Supports PDF, Word, Excel, PPT, images, with hierarchical splitting
 """
 
 import os
@@ -9,7 +9,7 @@ import logging
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -22,6 +22,13 @@ import pytesseract
 from PIL import Image
 import magic
 import chardet
+
+# Import new splitters
+from splitters import (
+    ParentChildSplitter,
+    SemanticSplitter,
+    RecursiveCharacterSplitter
+)
 
 # 配置日志
 logging.basicConfig(
@@ -391,7 +398,7 @@ def convert_document():
 
 @app.route('/batch_convert', methods=['POST'])
 def batch_convert():
-    """批量转换文档"""
+    """Batch convert documents"""
     try:
         files = request.files.getlist('files')
         if not files:
@@ -400,7 +407,7 @@ def batch_convert():
         results = []
         for file in files:
             if file.filename:
-                # 保存文件
+                # Save file
                 temp_file = tempfile.NamedTemporaryFile(
                     delete=False,
                     dir=UPLOAD_FOLDER,
@@ -409,7 +416,7 @@ def batch_convert():
                 file.save(temp_file.name)
                 
                 try:
-                    # 转换文档
+                    # Convert document
                     markdown_content = converter.convert_to_markdown(temp_file.name)
                     
                     results.append({
@@ -433,6 +440,206 @@ def batch_convert():
         
     except Exception as e:
         logger.error(f"Batch conversion error: {e}")
+        return jsonify({
+            'error': str(e),
+            'status': 'failed'
+        }), 500
+
+@app.route('/convert_hierarchical', methods=['POST'])
+def convert_hierarchical():
+    """Convert document with hierarchical parent-child splitting"""
+    try:
+        # Check file
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Get splitting parameters
+        strategy = request.form.get('strategy', 'parent_child')
+        parent_chunk_size = int(request.form.get('parent_chunk_size', 2000))
+        child_chunk_size = int(request.form.get('child_chunk_size', 500))
+        parent_overlap = int(request.form.get('parent_overlap', 200))
+        child_overlap = int(request.form.get('child_overlap', 50))
+        
+        # Save file
+        temp_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            dir=UPLOAD_FOLDER,
+            suffix=Path(file.filename).suffix
+        )
+        file.save(temp_file.name)
+        
+        try:
+            # Convert to markdown first
+            markdown_content = converter.convert_to_markdown(temp_file.name)
+            
+            # Extract metadata
+            metadata = {
+                'filename': file.filename,
+                'file_type': Path(file.filename).suffix,
+                'conversion_time': os.path.getmtime(temp_file.name)
+            }
+            
+            # Apply hierarchical splitting based on strategy
+            if strategy == 'parent_child':
+                splitter = ParentChildSplitter(
+                    parent_chunk_size=parent_chunk_size,
+                    child_chunk_size=child_chunk_size,
+                    parent_overlap=parent_overlap,
+                    child_overlap=child_overlap
+                )
+                chunks = splitter.split_document(markdown_content, metadata)
+                chunk_tree = splitter.get_chunk_tree(chunks)
+                
+            elif strategy == 'semantic':
+                splitter = SemanticSplitter(
+                    max_chunk_size=parent_chunk_size,
+                    min_chunk_size=child_chunk_size,
+                    similarity_threshold=0.5
+                )
+                chunks = splitter.split_document(markdown_content, metadata)
+                chunk_tree = None
+                
+            elif strategy == 'recursive':
+                splitter = RecursiveCharacterSplitter(
+                    chunk_size=parent_chunk_size,
+                    chunk_overlap=parent_overlap
+                )
+                chunks = splitter.split_document(markdown_content, metadata)
+                chunk_tree = None
+                
+            else:
+                return jsonify({'error': f'Unknown strategy: {strategy}'}), 400
+            
+            # Format chunks for response
+            formatted_chunks = []
+            for chunk in chunks:
+                chunk_dict = {
+                    'content': chunk.content,
+                    'chunk_id': chunk.chunk_id,
+                    'metadata': chunk.metadata
+                }
+                
+                # Add parent-child specific fields
+                if hasattr(chunk, 'parent_id'):
+                    chunk_dict['parent_id'] = chunk.parent_id
+                if hasattr(chunk, 'children_ids'):
+                    chunk_dict['children_ids'] = chunk.children_ids
+                if hasattr(chunk, 'level'):
+                    chunk_dict['level'] = chunk.level
+                    
+                formatted_chunks.append(chunk_dict)
+            
+            response = {
+                'status': 'success',
+                'strategy': strategy,
+                'total_chunks': len(chunks),
+                'chunks': formatted_chunks,
+                'original_filename': file.filename,
+                'markdown_length': len(markdown_content)
+            }
+            
+            if chunk_tree:
+                response['chunk_tree'] = chunk_tree
+                
+            return jsonify(response)
+            
+        finally:
+            # Clean up temp file
+            os.unlink(temp_file.name)
+            
+    except Exception as e:
+        logger.error(f"Hierarchical conversion error: {e}")
+        return jsonify({
+            'error': str(e),
+            'status': 'failed'
+        }), 500
+
+@app.route('/split_text', methods=['POST'])
+def split_text():
+    """Split raw text with hierarchical strategy"""
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        text = data['text']
+        strategy = data.get('strategy', 'parent_child')
+        metadata = data.get('metadata', {})
+        
+        # Get splitting parameters
+        parent_chunk_size = data.get('parent_chunk_size', 2000)
+        child_chunk_size = data.get('child_chunk_size', 500)
+        parent_overlap = data.get('parent_overlap', 200)
+        child_overlap = data.get('child_overlap', 50)
+        
+        # Apply splitting based on strategy
+        if strategy == 'parent_child':
+            splitter = ParentChildSplitter(
+                parent_chunk_size=parent_chunk_size,
+                child_chunk_size=child_chunk_size,
+                parent_overlap=parent_overlap,
+                child_overlap=child_overlap
+            )
+            chunks = splitter.split_document(text, metadata)
+            chunk_tree = splitter.get_chunk_tree(chunks)
+            
+        elif strategy == 'semantic':
+            splitter = SemanticSplitter(
+                max_chunk_size=parent_chunk_size,
+                min_chunk_size=child_chunk_size
+            )
+            chunks = splitter.split_document(text, metadata)
+            chunk_tree = None
+            
+        elif strategy == 'recursive':
+            splitter = RecursiveCharacterSplitter(
+                chunk_size=parent_chunk_size,
+                chunk_overlap=parent_overlap
+            )
+            chunks = splitter.split_document(text, metadata)
+            chunk_tree = None
+            
+        else:
+            return jsonify({'error': f'Unknown strategy: {strategy}'}), 400
+        
+        # Format chunks for response
+        formatted_chunks = []
+        for chunk in chunks:
+            chunk_dict = {
+                'content': chunk.content,
+                'chunk_id': chunk.chunk_id,
+                'metadata': chunk.metadata
+            }
+            
+            # Add strategy-specific fields
+            if hasattr(chunk, 'parent_id'):
+                chunk_dict['parent_id'] = chunk.parent_id
+            if hasattr(chunk, 'children_ids'):
+                chunk_dict['children_ids'] = chunk.children_ids
+            if hasattr(chunk, 'level'):
+                chunk_dict['level'] = chunk.level
+                
+            formatted_chunks.append(chunk_dict)
+        
+        response = {
+            'status': 'success',
+            'strategy': strategy,
+            'total_chunks': len(chunks),
+            'chunks': formatted_chunks,
+            'text_length': len(text)
+        }
+        
+        if chunk_tree:
+            response['chunk_tree'] = chunk_tree
+            
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Text splitting error: {e}")
         return jsonify({
             'error': str(e),
             'status': 'failed'

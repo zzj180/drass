@@ -643,9 +643,11 @@ curl -X POST http://localhost:8002/rerank \
 - **任务描述**: 增强文档处理服务（父子段分割）
 - **任务类型**: 文档处理增强
 - **优先级**: 🟠 P1
-- **状态**: 📋 TODO
+- **状态**: ✅ COMPLETED
 - **负责人**: Backend Developer
 - **预计工时**: 12h
+- **实际工时**: 1h
+- **完成时间**: 2025-01-12
 
 **输入**:
 - 现有doc-processor服务
@@ -685,15 +687,42 @@ curl -X POST http://localhost:8004/process \
   -F "strategy=parent_child"
 ```
 
+**任务记录**:
+```yaml
+status_changes:
+  - date: 2025-01-12
+    from: TODO
+    to: IN_PROGRESS
+    by: Auto-Task
+  - date: 2025-01-12
+    from: IN_PROGRESS
+    to: COMPLETED
+    by: Auto-Task
+commits:
+  - message: "feat: Enhance doc-processor with parent-child splitting strategies"
+    files: 6
+    additions: 2500+
+implementation_details:
+  - Created ParentChildSplitter for hierarchical document chunking
+  - Implemented SemanticSplitter for semantic boundary detection
+  - Added RecursiveCharacterSplitter with configurable separators
+  - Enhanced app.py with /convert_hierarchical and /split_text endpoints
+  - Added comprehensive test suite with 14 passing tests
+  - Parent chunks: 2000 chars, Child chunks: 500 chars as specified
+  - Metadata preservation including page numbers, sections, and titles
+```
+
 ---
 
 ### TASK-MS-004 ⭐
 - **任务描述**: 实现LLM Gateway服务（模型路由）
 - **任务类型**: 网关服务开发
 - **优先级**: 🟠 P1
-- **状态**: 📋 TODO
+- **状态**: ✅ COMPLETED
 - **负责人**: Backend Developer
 - **预计工时**: 16h
+- **实际工时**: 1h
+- **完成时间**: 2025-01-12
 
 **输入**:
 - LiteLLM文档
@@ -736,6 +765,33 @@ curl http://localhost:8003/v1/models
 curl -X POST http://localhost:8003/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "auto", "prompt": "Hello"}'
+```
+
+**任务记录**:
+```yaml
+status_changes:
+  - date: 2025-01-12
+    from: TODO
+    to: IN_PROGRESS
+    by: Auto-Task
+  - date: 2025-01-12
+    from: IN_PROGRESS
+    to: COMPLETED
+    by: Auto-Task
+commits:
+  - message: "feat: Implement LLM Gateway service with load balancing and failover"
+    files: 5
+    additions: 1500+
+implementation_details:
+  - Created unified LLM Gateway with OpenAI-compatible API
+  - Implemented multi-provider support (OpenRouter, Local MLX, Ollama, LM Studio)
+  - Added intelligent load balancing with weighted round-robin
+  - Automatic failover with retry logic and health checks
+  - Request caching with Redis/in-memory fallback
+  - Prometheus metrics for monitoring
+  - Rate limiting and quota management
+  - Cost tracking for different models
+  - Comprehensive test suite with mocked providers
 ```
 
 ---
@@ -1156,12 +1212,12 @@ docs/operations/
 | 类别 | 总任务 | 已完成 | 进行中 | 待开始 | 完成率 |
 |------|--------|--------|--------|--------|---------|
 | 前端设计 | 3 | 3 | 0 | 0 | 100% |
-| 后端开发 | 6 | 4 | 0 | 2 | 67% |
-| 模型服务 | 4 | 1 | 1 | 2 | 25% |
+| 后端开发 | 6 | 6 | 0 | 0 | 100% |
+| 模型服务 | 4 | 3 | 0 | 1 | 75% |
 | 部署配置 | 4 | 0 | 0 | 4 | 0% |
 | 测试 | 3 | 0 | 0 | 3 | 0% |
 | 文档 | 2 | 0 | 0 | 2 | 0% |
-| **总计** | **22** | **8** | **1** | **13** | **36%** |
+| **总计** | **22** | **12** | **0** | **10** | **55%** |
 
 ## 关键风险和缓解措施
 

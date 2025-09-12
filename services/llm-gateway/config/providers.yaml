@@ -1,0 +1,194 @@
+# LLM Gateway Provider Configuration
+
+providers:
+  # OpenRouter - Cloud provider with multiple models
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key: ${OPENROUTER_API_KEY}
+    models:
+      - openai/gpt-4-turbo-preview
+      - openai/gpt-3.5-turbo
+      - anthropic/claude-3-opus-20240229
+      - anthropic/claude-3-sonnet-20240229
+      - meta-llama/llama-3-70b-instruct
+      - google/gemini-pro
+    priority: 1  # Highest priority
+    max_rpm: 100
+    timeout: 30
+    retry_on_errors:
+      - 429  # Rate limit
+      - 503  # Service unavailable
+    
+  # Local MLX Model (Qwen3-8B)
+  local_mlx:
+    base_url: http://localhost:8001/v1
+    api_key: none
+    models:
+      - qwen3-8b-mlx
+    priority: 2
+    max_rpm: 60
+    timeout: 60
+    health_check_url: /health
+    
+  # Ollama - Local model server
+  ollama:
+    base_url: http://localhost:11434/v1
+    api_key: none
+    models:
+      - qwen2.5:7b
+      - llama3.2:latest
+      - mistral:latest
+      - deepseek-coder:6.7b
+    priority: 3
+    max_rpm: 30
+    timeout: 120
+    
+  # LM Studio - Alternative local server
+  lmstudio:
+    base_url: http://localhost:1234/v1
+    api_key: none
+    models:
+      - local-model
+    priority: 4
+    max_rpm: 20
+    timeout: 120
+    enabled: false  # Disabled by default
+
+# Routing Rules
+routing_rules:
+  # Default model when "auto" is specified
+  default_model: openai/gpt-3.5-turbo
+  
+  # Fallback chain when primary provider fails
+  fallback_chain:
+    - openrouter
+    - local_mlx
+    - ollama
+    
+  # Model selection based on use case
+  model_preferences:
+    # Fast responses for simple queries
+    fast:
+      - openai/gpt-3.5-turbo
+      - qwen2.5:7b
+      - mistral:latest
+    
+    # High quality for complex tasks
+    quality:
+      - openai/gpt-4-turbo-preview
+      - anthropic/claude-3-opus-20240229
+      - meta-llama/llama-3-70b-instruct
+    
+    # Local models (no API costs)
+    local:
+      - qwen3-8b-mlx
+      - qwen2.5:7b
+      - llama3.2:latest
+    
+    # Code generation
+    code:
+      - openai/gpt-4-turbo-preview
+      - anthropic/claude-3-opus-20240229
+      - deepseek-coder:6.7b
+    
+    # Embeddings
+    embeddings:
+      - text-embedding-ada-002
+      - bge-large-zh-v1.5
+
+# Load Balancing Configuration
+load_balancing:
+  strategy: weighted_round_robin  # Options: round_robin, weighted_round_robin, least_connections
+  health_check_interval: 60  # seconds
+  failure_threshold: 3  # Mark unhealthy after N failures
+  recovery_threshold: 2  # Mark healthy after N successes
+  
+# Rate Limiting
+rate_limiting:
+  enabled: true
+  default_rpm: 60
+  default_rpd: 10000  # Requests per day
+  
+  # User-specific limits
+  user_limits:
+    premium:
+      rpm: 200
+      rpd: 50000
+    standard:
+      rpm: 60
+      rpd: 10000
+    free:
+      rpm: 10
+      rpd: 100
+
+# Caching Configuration
+caching:
+  enabled: true
+  backend: redis  # Options: redis, memory
+  ttl: 3600  # Cache TTL in seconds
+  max_size: 10000  # Max cache entries
+  
+  # Cache key patterns to exclude
+  exclude_patterns:
+    - "*stream*"
+    - "*chat*"
+
+# Monitoring and Observability
+monitoring:
+  metrics_enabled: true
+  metrics_port: 9090
+  
+  # Prometheus labels
+  labels:
+    - provider
+    - model
+    - status
+    - user_tier
+  
+  # Custom metrics
+  custom_metrics:
+    - name: token_cost
+      type: counter
+      description: Estimated token costs
+    - name: cache_hit_rate
+      type: gauge
+      description: Cache hit rate percentage
+
+# Security Configuration
+security:
+  require_api_key: true
+  api_key_header: X-API-Key
+  
+  # IP allowlist (empty = allow all)
+  ip_allowlist: []
+  
+  # Rate limit by IP
+  ip_rate_limit:
+    enabled: true
+    rpm: 100
+    
+# Cost Tracking
+cost_tracking:
+  enabled: true
+  
+  # Cost per 1K tokens (in USD)
+  token_costs:
+    openai/gpt-4-turbo-preview:
+      input: 0.01
+      output: 0.03
+    openai/gpt-3.5-turbo:
+      input: 0.0005
+      output: 0.0015
+    anthropic/claude-3-opus-20240229:
+      input: 0.015
+      output: 0.075
+    anthropic/claude-3-sonnet-20240229:
+      input: 0.003
+      output: 0.015
+    # Local models have no cost
+    qwen3-8b-mlx:
+      input: 0
+      output: 0
+    qwen2.5:7b:
+      input: 0
+      output: 0
