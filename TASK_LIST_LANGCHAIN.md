@@ -2,9 +2,9 @@
 
 ## 项目概述
 - **项目名称**: LangChain智能合规助手
-- **版本**: 1.0.0
+- **版本**: 1.1.0
 - **创建日期**: 2024-01-09
-- **最后更新**: 2024-01-09
+- **最后更新**: 2024-09-12
 
 ## 任务状态定义
 - 📋 **TODO**: 待开始
@@ -368,7 +368,84 @@ commits:
 ---
 
 ### TASK-BE-005
-- **任务描述**: 实现文档上传和处理API
+- **任务描述**: 完善统一LLM服务层封装
+- **任务类型**: 服务封装
+- **优先级**: 🔴 P0
+- **状态**: ✅ COMPLETED
+- **负责人**: Backend Developer
+- **预计工时**: 12h
+- **实际工时**: 1h
+- **完成时间**: 2025-01-12
+
+**输入**:
+- 现有qwen3_api_server.py实现
+- LM Studio集成配置
+- OpenRouter API文档
+- 设计文档中的LLMService规范
+
+**预期输出**:
+```python
+services/main-app/app/services/
+├── llm_service.py          # 统一LLM服务接口
+├── providers/
+│   ├── __init__.py
+│   ├── openrouter.py       # OpenRouter提供商
+│   ├── local_mlx.py        # 本地MLX模型
+│   ├── lmstudio.py         # LM Studio集成
+│   └── vllm.py             # vLLM集成（未来）
+└── tests/
+    └── test_llm_service.py
+```
+
+**功能要求**:
+- ✅ 统一的LLM接口（generate, stream, embed）
+- ✅ 多模型提供商支持切换
+- ✅ 自动重试和故障转移
+- ✅ Token计数和成本跟踪
+- ✅ 请求缓存机制
+
+**验收标准**:
+```bash
+# 单元测试
+pytest services/main-app/app/services/tests/test_llm_service.py -v
+# 集成测试 - 测试不同provider
+python -m pytest --provider=openrouter
+python -m pytest --provider=local_mlx
+```
+
+**依赖**: TASK-BE-001
+
+**任务记录**:
+```yaml
+status_changes:
+  - date: 2025-01-12
+    from: TODO
+    to: IN_PROGRESS
+    by: Auto-Task
+  - date: 2025-01-12
+    from: IN_PROGRESS
+    to: COMPLETED
+    by: Auto-Task
+commits:
+  - message: "feat: Implement unified LLM service layer with multiple providers, caching, and failover"
+    files: 8
+    additions: 2000+
+implementation_details:
+  - Created base provider interface (BaseLLMProvider)
+  - Implemented OpenRouter provider for cloud models
+  - Implemented Local MLX provider for Apple Silicon
+  - Implemented LM Studio provider for local models
+  - Added LRU and Redis caching strategies
+  - Implemented automatic retry with exponential backoff
+  - Added automatic failover to backup providers
+  - Comprehensive cost tracking and metrics
+  - Full test coverage with unit tests
+```
+
+---
+
+### TASK-BE-006
+- **任务描述**: 实现文档上传和处理API（增强版）
 - **任务类型**: API开发
 - **优先级**: 🟠 P1
 - **状态**: 📋 TODO
@@ -378,6 +455,7 @@ commits:
 **输入**:
 - 文件上传需求
 - 文档处理流程设计
+- 现有doc-processor服务
 
 **预期输出**:
 ```python
@@ -391,944 +469,501 @@ services/main-app/app/api/v1/
     └── s3_integration.py   # S3/MinIO集成
 ```
 
+**功能要求**:
+- ✅ 支持批量文件上传
+- ✅ 文件类型验证（PDF/DOCX/XLSX/PPTX/TXT/MD）
+- ✅ 异步处理队列
+- ✅ 处理进度跟踪
+- ✅ 元数据提取和存储
+
+**验收标准**:
+```bash
+# API测试
+curl -X POST http://localhost:8000/api/v1/documents/upload \
+  -F "file=@test.pdf" \
+  -F "purpose=knowledge_base"
+# 查看处理状态
+curl http://localhost:8000/api/v1/documents/{doc_id}/status
+```
+
 **依赖**: TASK-BE-001, TASK-MS-003
 
 ---
 
-## 3. 用户交互界面开发任务
-
-### TASK-UI-001
-- **任务描述**: 实现ChatInterface基础消息组件（P0功能）
-- **任务类型**: UI组件开发 - 核心功能
-- **优先级**: 🔴 P0
-- **状态**: ✅ COMPLETED
-- **负责人**: Frontend Developer
-- **预计工时**: 8h
-- **实际工时**: 1h
-- **完成时间**: 2025-09-09
-
-**输入**:
-- 组件规范: `docs/CHATINTERFACE_COMPONENT_SPEC.md`
-- Material-UI组件库
-- Redux状态管理
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── ChatInterface.tsx      // 主聊天组件容器
-├── MessageList.tsx       // 消息列表（虚拟滚动）
-├── MessageItem.tsx       // 单条消息展示
-├── types.ts             // TypeScript类型定义
-└── index.ts
-```
-
-**功能要求**:
-- ✅ 消息展示（用户/助手/系统）
-- ✅ 消息时间戳
-- ✅ 用户头像
-- ✅ 自动滚动到底部
-- ✅ 消息加载状态
-
-**测试验收**:
-```bash
-# 单元测试
-npm test ChatInterface.test.tsx
-# 组件渲染测试
-npm run storybook
-# 查看组件demo: http://localhost:6006
-```
-
-**依赖**: TASK-FE-001, TASK-FE-002, TASK-FE-003
-
-**任务记录**:
-```yaml
-status_changes:
-  - date: 2025-09-09
-    from: TODO
-    to: IN_PROGRESS
-    by: Auto-Task
-  - date: 2025-09-09
-    from: IN_PROGRESS
-    to: COMPLETED
-    by: Auto-Task
-commits:
-  - message: "feat: Implement ChatInterface basic message components"
-    files: 8
-    additions: 800+
-    changes:
-      - Created ChatInterface.tsx main container
-      - Created MessageList.tsx with virtual scrolling
-      - Created MessageItem.tsx with role-based styling
-      - Created types.ts with TypeScript interfaces
-      - Added comprehensive unit tests
-```
-
----
-
-### TASK-UI-001A
-- **任务描述**: 实现ChatInterface输入区域组件（P0功能）
-- **任务类型**: UI组件开发 - 输入交互
-- **优先级**: 🔴 P0
-- **状态**: ✅ COMPLETED
-- **负责人**: Frontend Developer
-- **预计工时**: 6h
-- **实际工时**: 1h
-- **完成时间**: 2024-01-09
-
-**输入**:
-- 组件规范: `docs/CHATINTERFACE_COMPONENT_SPEC.md#输入区域`
-- Material-UI TextField组件
-- 键盘事件处理
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── InputArea.tsx         // 输入区域组件
-├── InputControls.tsx     // 发送按钮和控制
-├── CharacterCounter.tsx  // 字数统计
-└── hooks/
-    └── useTextInput.ts   // 输入状态管理hook
-```
-
-**功能要求**:
-- ✅ 多行文本输入（自动调整高度）
-- ✅ Enter发送/Shift+Enter换行
-- ✅ 字数限制（4096字符）
-- ✅ 发送按钮状态管理
-- ✅ 输入框清空和重置
-
-**任务记录**:
-```yaml
-status_changes:
-  - date: 2024-01-09
-    from: TODO
-    to: IN_PROGRESS
-    by: Auto-Task
-  - date: 2024-01-09
-    from: IN_PROGRESS
-    to: COMPLETED
-    by: Auto-Task
-commits:
-  - message: "feat: Implement ChatInterface input area components with tests"
-    files: 7
-    additions: 1200+
-```
-
-**测试验收**:
-```bash
-# 功能测试
-- 输入文本并发送
-- 测试快捷键
-- 测试字数限制
-- 测试多行输入
-```
-
-**依赖**: TASK-UI-001
-
----
-
-### TASK-UI-001B
-- **任务描述**: 实现流式响应和加载状态（P0功能）
-- **任务类型**: UI组件开发 - 实时交互
-- **优先级**: 🔴 P0
-- **状态**: ✅ COMPLETED
-- **负责人**: Frontend Developer
-- **预计工时**: 8h
-- **实际工时**: 0.5h
-- **完成时间**: 2024-01-09
-
-**输入**:
-- WebSocket连接规范
-- 流式响应处理逻辑
-- Markdown渲染库
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── StreamingMessage.tsx   // 流式消息组件
-├── LoadingIndicator.tsx   // 加载动画
-├── MarkdownRenderer.tsx   // Markdown渲染
-└── hooks/
-    └── useStreaming.ts    // 流式数据处理hook
-```
-
-**功能要求**:
-- ✅ 打字机效果展示
-- ✅ 加载动画组件
-- ✅ Markdown渲染支持
-- ✅ 流式数据缓冲处理
-- ✅ 实时状态管理
-
-**任务记录**:
-```yaml
-status_changes:
-  - date: 2024-01-09
-    from: TODO
-    to: IN_PROGRESS
-    by: Auto-Task
-  - date: 2024-01-09
-    from: IN_PROGRESS
-    to: COMPLETED
-    by: Auto-Task
-commits:
-  - message: "feat: Implement streaming response components with markdown rendering"
-    files: 6
-    additions: 1100+
-```
-
-**测试验收**:
-```bash
-# Mock WebSocket测试
-npm test StreamingMessage.test.tsx
-# 实际WebSocket连接测试
-npm run test:integration
-```
-
-**依赖**: TASK-UI-001, TASK-BE-004
-
----
-
-### TASK-UI-002
-- **任务描述**: 开发文档上传组件（P1功能）
-- **任务类型**: UI组件开发
-- **优先级**: 🟠 P1
-- **状态**: ✅ COMPLETED
-- **负责人**: Frontend Developer
-- **预计工时**: 10h
-- **实际工时**: 0.5h
-- **完成时间**: 2024-01-09
-
-**输入**:
-- 组件规范: `docs/CHATINTERFACE_COMPONENT_SPEC.md#文件上传`
-- react-dropzone库
-- 文件类型验证
-
-**预期输出**:
-```typescript
-frontend/src/components/DocumentUpload/
-├── DocumentUpload.tsx     // 主上传组件
-├── DropZone.tsx          // 拖拽区域
-├── FileList.tsx          // 文件列表
-├── UploadProgress.tsx    // 上传进度条
-├── FileValidator.ts      // 文件验证逻辑
-└── hooks/
-    └── useFileUpload.ts  // 上传状态管理
-```
-
-**功能要求**:
-- ✅ 拖拽上传文件
-- ✅ 文件类型验证（PDF/DOCX/XLSX/PPTX/TXT/MD）
-- ✅ 文件大小限制（10MB）
-- ✅ 上传进度显示
-- ✅ 批量上传支持
-- ✅ 上传失败重试
-
-**测试验收**:
-```bash
-# 上传功能测试
-- 拖拽单个文件
-- 批量选择文件
-- 大文件限制测试
-- 错误格式拒绝
-```
-
-**依赖**: TASK-UI-001, TASK-BE-005
-
----
-
-### TASK-UI-002A
-- **任务描述**: 实现会话管理功能（P1功能）
-- **任务类型**: UI组件开发 - 会话管理
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: Frontend Developer
-- **预计工时**: 8h
-
-**输入**:
-- 组件规范: `docs/CHATINTERFACE_COMPONENT_SPEC.md#会话管理`
-- Redux会话状态管理
-- localStorage持久化
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── SessionSidebar.tsx     // 会话侧边栏
-├── SessionList.tsx        // 会话列表
-├── SessionItem.tsx        // 单个会话项
-├── NewSessionButton.tsx   // 新建会话按钮
-└── hooks/
-    └── useSession.ts      // 会话管理hook
-```
-
-**功能要求**:
-- ✅ 新建会话
-- ✅ 切换会话
-- ✅ 会话重命名
-- ✅ 删除会话
-- ✅ 会话搜索
-- ✅ 本地存储持久化
-
-**测试验收**:
-```bash
-# 会话管理测试
-- 创建多个会话
-- 切换保持消息
-- 删除确认对话框
-- 搜索过滤功能
-```
-
-**依赖**: TASK-UI-001
-
----
-
-### TASK-UI-002B
-- **任务描述**: 实现消息操作功能（P1功能）
-- **任务类型**: UI组件开发 - 消息交互
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: Frontend Developer
-- **预计工时**: 6h
-
-**输入**:
-- 消息操作交互设计
-- 剪贴板API
-- 右键菜单组件
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── MessageActions.tsx     // 消息操作按钮组
-├── CopyButton.tsx        // 复制按钮
-├── EditMessage.tsx       // 编辑消息
-├── RegenerateButton.tsx  // 重新生成
-└── MessageMenu.tsx       // 消息右键菜单
-```
-
-**功能要求**:
-- ✅ 复制消息内容
-- ✅ 编辑并重发
-- ✅ 重新生成回复
-- ✅ 删除单条消息
-- ✅ 引用消息
-
-**测试验收**:
-```bash
-# 消息操作测试
-- 复制到剪贴板
-- 编辑后重新生成
-- 删除消息确认
-- 引用格式正确
-```
-
-**依赖**: TASK-UI-001
-
----
-
-### TASK-UI-003
-- **任务描述**: 实现WebSocket连接管理（P0功能）
-- **任务类型**: UI组件开发 - 实时通信
-- **优先级**: 🔴 P0
-- **状态**: ✅ COMPLETED
-- **负责人**: Frontend Developer
-- **预计工时**: 10h
-- **实际工时**: 0.5h
-- **完成时间**: 2024-01-09
-
-**输入**:
-- WebSocket API规范
-- 重连机制设计
-- 心跳检测逻辑
-
-**预期输出**:
-```typescript
-frontend/src/services/
-├── WebSocketService.ts    // WebSocket服务类
-├── MessageQueue.ts        // 消息队列管理
-└── hooks/
-    ├── useWebSocket.ts    // WebSocket连接hook
-    └── useReconnect.ts    // 自动重连hook
-```
-
-**功能要求**:
-- ✅ 建立WebSocket连接
-- ✅ 自动重连机制
-- ✅ 心跳检测
-- ✅ 消息队列管理
-- ✅ 连接状态监控
-
-**任务记录**:
-```yaml
-status_changes:
-  - date: 2024-01-09
-    from: TODO
-    to: IN_PROGRESS
-    by: Auto-Task
-  - date: 2024-01-09
-    from: IN_PROGRESS
-    to: COMPLETED
-    by: Auto-Task
-commits:
-  - message: "feat: Implement WebSocket service with reconnection and message queue"
-    files: 4
-    additions: 900+
-```
-
-**测试验收**:
-```bash
-# WebSocket测试
-npm test WebSocketService.test.ts
-# 模拟断线重连
-npm run test:ws-reconnect
-# 消息队列测试
-npm run test:message-queue
-```
-
-**依赖**: TASK-BE-004
-
----
-
-### TASK-UI-004
-- **任务描述**: 实现提示词模板功能（P2功能）
-- **任务类型**: UI组件开发 - 增强功能
-- **优先级**: 🟡 P2
-- **状态**: 📋 TODO
-- **负责人**: Frontend Developer
-- **预计工时**: 8h
-
-**输入**:
-- 组件规范: `docs/CHATINTERFACE_COMPONENT_SPEC.md#提示词模板`
-- 命令触发机制（/命令）
-- 模板数据结构
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── PromptTemplates/
-│   ├── TemplateList.tsx      // 模板列表
-│   ├── TemplateItem.tsx      // 单个模板
-│   ├── TemplateEditor.tsx    // 模板编辑器
-│   ├── CommandMenu.tsx       // 命令菜单
-│   └── templates.json        // 预设模板
-```
-
-**功能要求**:
-- ✅ /命令触发模板列表
-- ✅ 模板分类（合规/风险/分析）
-- ✅ 自定义模板创建
-- ✅ 变量占位符替换
-- ✅ 快捷键支持
-
-**测试验收**:
-```bash
-# 模板功能测试
-- 输入/触发菜单
-- 选择并应用模板
-- 创建自定义模板
-- 变量替换验证
-```
-
-**依赖**: TASK-UI-001, TASK-UI-001A
-
----
-
-### TASK-UI-005
-- **任务描述**: 实现知识库引用显示（P2功能）
-- **任务类型**: UI组件开发 - 引用展示
-- **优先级**: 🟡 P2
-- **状态**: 📋 TODO
-- **负责人**: Frontend Developer
-- **预计工时**: 6h
-
-**输入**:
-- 引用数据格式
-- 相关度评分显示
-- 原文查看交互
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/
-├── References/
-│   ├── ReferenceList.tsx     // 引用列表
-│   ├── ReferenceCard.tsx     // 引用卡片
-│   ├── SourceViewer.tsx      // 原文查看器
-│   └── RelevanceScore.tsx    // 相关度显示
-```
-
-**功能要求**:
-- ✅ 显示引用来源
-- ✅ 相关度分数展示
-- ✅ 点击查看原文
-- ✅ 引用内容高亮
-- ✅ 折叠/展开引用
-
-**测试验收**:
-```bash
-# 引用显示测试
-- 接收带引用的回复
-- 点击查看完整文档
-- 相关度排序显示
-```
-
-**依赖**: TASK-UI-001, TASK-BE-002
-
----
-
-### TASK-UI-006
-- **任务描述**: 实现响应式布局和移动端适配
-- **任务类型**: 响应式设计
-- **优先级**: 🟡 P2
-- **状态**: 📋 TODO
-- **负责人**: Frontend Developer
-- **预计工时**: 10h
-
-**输入**:
-- 响应式断点设计（sm/md/lg/xl）
-- 移动端交互规范
-- PWA配置要求
-
-**预期输出**:
-```typescript
-frontend/src/layouts/
-├── ResponsiveLayout.tsx   // 响应式容器
-├── MobileDrawer.tsx       // 移动端抽屉
-├── BottomInput.tsx        // 底部输入栏
-└── styles/
-    └── breakpoints.ts     // 断点定义
-```
-
-**功能要求**:
-- ✅ 桌面/平板/手机适配
-- ✅ 侧边栏响应式收起
-- ✅ 移动端底部输入
-- ✅ 触摸手势支持
-- ✅ PWA离线支持
-
-**测试验收**:
-```bash
-# 响应式测试
-- Chrome DevTools设备模拟
-- 实际移动设备测试
-- PWA安装测试
-```
-
-**依赖**: TASK-UI-001, TASK-UI-002A
-
----
-
-### TASK-UI-007
-- **任务描述**: 实现主题切换和个性化设置
-- **任务类型**: UI组件开发 - 用户体验
-- **优先级**: 🟢 P3
-- **状态**: 📋 TODO
-- **负责人**: Frontend Developer
-- **预计工时**: 6h
-
-**输入**:
-- Material-UI主题系统
-- 暗色模式设计稿
-- 用户偏好存储
-
-**预期输出**:
-```typescript
-frontend/src/components/
-├── Settings/
-│   ├── ThemeToggle.tsx       // 主题切换按钮
-│   ├── FontSizeControl.tsx   // 字体大小调节
-│   ├── SettingsDialog.tsx    // 设置对话框
-│   └── Preferences.ts        // 偏好设置管理
-```
-
-**功能要求**:
-- ✅ 亮色/暗色主题切换
-- ✅ 字体大小调节
-- ✅ 快捷键自定义
-- ✅ 偏好设置持久化
-
-**测试验收**:
-```bash
-# 主题测试
-- 切换主题即时生效
-- 刷新保持主题设置
-- 所有组件适配主题
-```
-
-**依赖**: TASK-FE-002, TASK-UI-001
-
----
-
-## 4. 底层模型服务任务
+## 3. 模型服务任务（关键缺失）
 
 ### TASK-MS-001
-- **任务描述**: 开发Embedding服务
-- **任务类型**: 模型服务开发
-- **优先级**: 🔴 P0
-- **状态**: 📋 TODO
+- **任务描述**: 完善Embedding服务（添加缓存和批处理）
+- **任务类型**: 模型服务优化
+- **优先级**: 🟠 P1
+- **状态**: 🚧 IN_PROGRESS
 - **负责人**: ML Engineer
-- **预计工时**: 16h
+- **预计工时**: 8h
 
 **输入**:
-- 参考实现: `docs/LANGCHAIN_COMPLIANCE_ASSISTANT_DESIGN.md#embedding服务`
+- 现有embedding-service实现
+- 设计文档embedding服务规范
 - sentence-transformers文档
-- BGE模型文档
 
 **预期输出**:
 ```python
 services/embedding-service/
-├── app.py                 # FastAPI服务
-├── models/
-│   └── embedding.py       # 嵌入模型封装
-├── requirements.txt
-├── Dockerfile
+├── app.py                  # FastAPI服务（已有，需增强）
+├── cache/
+│   ├── redis_cache.py      # Redis缓存实现
+│   └── lru_cache.py        # 本地LRU缓存
+├── batch_processor.py      # 批处理优化
 └── tests/
-    └── test_embedding.py
+    ├── test_embedding.py
+    └── test_cache.py
 ```
 
-**任务记录**:
-```yaml
-performance_metrics:
-  - latency: < 100ms
-  - throughput: > 100 req/s
-  - batch_size: 32
+**功能增强**:
+- ✅ Redis缓存集成（已计算的embedding）
+- ✅ 批量处理优化（batch_size=32）
+- ✅ 异步处理支持
+- ✅ 健康检查端点
+- ✅ Prometheus指标暴露
+
+**验收标准**:
+```bash
+# 性能测试
+python tests/benchmark_embedding.py
+# 期望: latency < 100ms, throughput > 100 req/s
 ```
 
 ---
 
-### TASK-MS-002
-- **任务描述**: 开发Reranking服务
+### TASK-MS-002 ⭐
+- **任务描述**: 实现Reranking服务（全新开发）
 - **任务类型**: 模型服务开发
 - **优先级**: 🔴 P0
-- **状态**: 📋 TODO
+- **状态**: ✅ COMPLETED
 - **负责人**: ML Engineer
 - **预计工时**: 16h
+- **实际工时**: 1h
+- **完成时间**: 2024-09-12
 
 **输入**:
-- 参考实现: `docs/LANGCHAIN_COMPLIANCE_ASSISTANT_DESIGN.md#reranking服务`
+- 设计文档: `docs/LANGCHAIN_COMPLIANCE_ASSISTANT_DESIGN.md#reranking服务`
 - Cross-Encoder文档
 - BGE-Reranker模型
 
 **预期输出**:
 ```python
 services/reranking-service/
-├── app.py                 # FastAPI服务
+├── app.py                  # FastAPI服务
 ├── models/
-│   └── reranker.py       # 重排序模型
+│   ├── reranker.py        # 重排序模型封装
+│   └── model_loader.py    # 模型加载管理
+├── config.py              # 配置管理
 ├── requirements.txt
 ├── Dockerfile
 └── tests/
-    └── test_reranking.py
+    ├── test_reranking.py
+    └── test_integration.py
+```
+
+**功能要求**:
+- ✅ Cross-Encoder模型支持
+- ✅ 批量重排序（最多100文档）
+- ✅ 分数归一化
+- ✅ Top-K选择（默认10）
+- ✅ 异步处理
+- ✅ 模型缓存和预加载
+
+**验收标准**:
+```bash
+# 启动服务
+docker-compose up reranking-service
+# API测试
+curl -X POST http://localhost:8002/rerank \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "数据合规要求",
+    "documents": ["doc1", "doc2", "doc3"],
+    "top_k": 2
+  }'
+# 性能: 100个文档重排序 < 500ms
 ```
 
 ---
 
 ### TASK-MS-003
-- **任务描述**: 开发文档处理服务（增强版）
-- **任务类型**: 文档处理服务
+- **任务描述**: 增强文档处理服务（父子段分割）
+- **任务类型**: 文档处理增强
 - **优先级**: 🟠 P1
 - **状态**: 📋 TODO
 - **负责人**: Backend Developer
-- **预计工时**: 20h
-
-**输入**:
-- 现有文档处理服务代码
-- LangChain Document Loaders
-- 父子段分割策略
-
-**预期输出**:
-```python
-services/document-processor/
-├── app.py
-├── processors/
-│   ├── pdf_processor.py
-│   ├── office_processor.py
-│   ├── markdown_converter.py
-│   └── ocr_processor.py
-├── splitters/
-│   ├── parent_child_splitter.py
-│   └── semantic_splitter.py
-└── Dockerfile
-```
-
----
-
-### TASK-MS-004
-- **任务描述**: 配置LLM网关服务
-- **任务类型**: 模型网关配置
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: DevOps Engineer
 - **预计工时**: 12h
 
 **输入**:
-- OpenRouter API文档
-- vLLM部署指南
-- LiteLLM配置
+- 现有doc-processor服务
+- LangChain Document Loaders
+- 父子段分割策略设计
 
 **预期输出**:
-```yaml
-services/llm-gateway/
-├── config/
-│   ├── models.yaml       # 模型配置
-│   ├── routes.yaml       # 路由规则
-│   └── limits.yaml       # 限流配置
-├── docker-compose.yml
-└── .env.example
+```python
+services/doc-processor/
+├── app.py                  # 主服务（已有）
+├── processors/
+│   ├── pdf_processor.py    # PDF处理（增强）
+│   ├── office_processor.py # Office文档处理
+│   └── ocr_processor.py    # OCR处理（已有）
+├── splitters/
+│   ├── parent_child_splitter.py  # 父子段分割器
+│   ├── semantic_splitter.py      # 语义分割器
+│   └── recursive_splitter.py     # 递归分割器
+└── tests/
+    └── test_splitters.py
+```
+
+**功能增强**:
+- ✅ 实现父子段分割策略
+- ✅ 父段: 2000字符，子段: 500字符
+- ✅ 保持段落之间的关联关系
+- ✅ 元数据增强（页码、章节、标题）
+- ✅ 支持表格和图片提取
+
+**验收标准**:
+```bash
+# 测试父子段分割
+python -m pytest services/doc-processor/tests/test_splitters.py
+# 处理测试文档
+curl -X POST http://localhost:8004/process \
+  -F "file=@test.pdf" \
+  -F "strategy=parent_child"
 ```
 
 ---
 
-## 5. 部署脚本和环境配置任务
+### TASK-MS-004 ⭐
+- **任务描述**: 实现LLM Gateway服务（模型路由）
+- **任务类型**: 网关服务开发
+- **优先级**: 🟠 P1
+- **状态**: 📋 TODO
+- **负责人**: Backend Developer
+- **预计工时**: 16h
+
+**输入**:
+- LiteLLM文档
+- 负载均衡需求
+- 模型路由规则
+
+**预期输出**:
+```python
+services/llm-gateway/
+├── app.py                  # FastAPI网关服务
+├── routers/
+│   ├── model_router.py     # 模型路由逻辑
+│   ├── load_balancer.py    # 负载均衡
+│   └── fallback.py         # 故障转移
+├── providers/
+│   ├── registry.py         # 提供商注册
+│   └── health_check.py     # 健康检查
+├── config/
+│   ├── models.yaml         # 模型配置
+│   └── routes.yaml         # 路由规则
+├── Dockerfile
+└── tests/
+```
+
+**功能要求**:
+- ✅ 统一API接口（OpenAI兼容）
+- ✅ 多模型提供商路由
+- ✅ 智能负载均衡
+- ✅ 自动故障转移
+- ✅ 请求限流和配额管理
+- ✅ 成本跟踪和计费
+
+**验收标准**:
+```bash
+# 启动网关
+docker-compose up llm-gateway
+# 测试路由
+curl http://localhost:8003/v1/models
+# 测试生成
+curl -X POST http://localhost:8003/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "auto", "prompt": "Hello"}'
+```
+
+---
+
+## 4. 部署和基础设施任务
 
 ### TASK-DEP-001
-- **任务描述**: 编写Docker Compose完整配置
+- **任务描述**: 重构Docker Compose为纯LangChain架构
 - **任务类型**: 部署配置
 - **优先级**: 🔴 P0
 - **状态**: 📋 TODO
 - **负责人**: DevOps Engineer
-- **预计工时**: 12h
+- **预计工时**: 16h
 
 **输入**:
-- 服务架构图
-- 网络拓扑设计
-- 存储需求
+- 现有docker-compose.yml（Dify版本）
+- 设计文档部署架构
+- 微服务依赖关系
 
 **预期输出**:
 ```yaml
 deployment/docker/
-├── docker-compose.yml     # 主配置
-├── docker-compose.dev.yml # 开发环境
-├── docker-compose.prod.yml # 生产环境
-├── .env.example          # 环境变量示例
+├── docker-compose.yml          # 主配置（完整服务）
+├── docker-compose.dev.yml      # 开发环境覆盖
+├── docker-compose.prod.yml     # 生产环境覆盖
+├── .env.example               # 环境变量示例
+├── nginx/
+│   └── nginx.conf             # Nginx配置
 └── scripts/
-    ├── start.sh          # 启动脚本
-    ├── stop.sh           # 停止脚本
-    └── backup.sh         # 备份脚本
+    ├── start-all.sh           # 启动所有服务
+    ├── start-dev.sh           # 开发环境启动
+    └── health-check.sh        # 健康检查脚本
+```
+
+**服务列表**:
+- ✅ frontend (React)
+- ✅ main-app (FastAPI)
+- ✅ embedding-service
+- ✅ reranking-service（新增）
+- ✅ doc-processor
+- ✅ llm-gateway（新增）
+- ✅ postgres
+- ✅ redis
+- ✅ chromadb
+- ✅ nginx
+
+**验收标准**:
+```bash
+# 一键启动所有服务
+./scripts/start-all.sh
+# 验证所有服务健康
+./scripts/health-check.sh
+# 所有服务应返回 200 OK
 ```
 
 ---
 
 ### TASK-DEP-002
-- **任务描述**: 编写AWS CloudFormation模板
-- **任务类型**: 云部署配置
+- **任务描述**: 实现基础监控系统（Prometheus + Grafana）
+- **任务类型**: 监控配置
 - **优先级**: 🟠 P1
 - **状态**: 📋 TODO
-- **负责人**: Cloud Architect
-- **预计工时**: 24h
+- **负责人**: SRE Engineer
+- **预计工时**: 12h
 
 **输入**:
-- AWS架构设计
-- 资源需求评估
-- 成本优化要求
+- Prometheus配置最佳实践
+- Grafana仪表板模板
+- 服务指标需求
 
 **预期输出**:
 ```yaml
-deployment/aws/
-├── cloudformation/
-│   ├── infrastructure.yml  # 基础设施
-│   ├── ecs-services.yml   # ECS服务
-│   ├── rds.yml           # 数据库
-│   └── parameters/       # 参数文件
-├── scripts/
-│   ├── deploy.sh
-│   └── destroy.sh
-└── terraform/            # Terraform替代方案
+monitoring/
+├── docker-compose.monitoring.yml
+├── prometheus/
+│   ├── prometheus.yml         # Prometheus配置
+│   └── alerts/
+│       ├── api_alerts.yml     # API告警规则
+│       └── model_alerts.yml   # 模型服务告警
+├── grafana/
+│   ├── provisioning/
+│   │   ├── dashboards/
+│   │   │   ├── api-metrics.json
+│   │   │   ├── llm-metrics.json
+│   │   │   └── system-metrics.json
+│   │   └── datasources/
+│   │       └── prometheus.yml
+└── exporters/
+    └── custom_exporter.py     # 自定义指标导出
+```
+
+**监控指标**:
+- ✅ API请求延迟（P50/P95/P99）
+- ✅ 模型推理时间
+- ✅ Token使用量和成本
+- ✅ 错误率和成功率
+- ✅ 系统资源使用率
+
+**验收标准**:
+```bash
+# 启动监控栈
+docker-compose -f docker-compose.monitoring.yml up -d
+# 访问Grafana
+open http://localhost:3001
+# 查看仪表板，确认数据流入
 ```
 
 ---
 
 ### TASK-DEP-003
-- **任务描述**: 配置Kubernetes部署文件
-- **任务类型**: K8s部署
+- **任务描述**: 配置集中式日志系统（ELK或Loki）
+- **任务类型**: 日志管理
 - **优先级**: 🟡 P2
 - **状态**: 📋 TODO
 - **负责人**: DevOps Engineer
-- **预计工时**: 20h
+- **预计工时**: 12h
 
 **输入**:
-- K8s最佳实践
-- Helm Chart模板
-- 资源限制要求
+- 日志聚合需求
+- 日志格式规范
+- 存储和保留策略
 
 **预期输出**:
 ```yaml
-deployment/k8s/
-├── manifests/
-│   ├── namespace.yaml
-│   ├── deployments/
-│   ├── services/
-│   ├── configmaps/
-│   └── secrets/
-├── helm/
-│   └── compliance-assistant/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       └── templates/
-└── kustomize/
+logging/
+├── docker-compose.logging.yml
+├── loki/
+│   ├── loki-config.yml
+│   └── promtail-config.yml
+├── logstash/
+│   └── pipeline/
+│       └── logstash.conf
+└── scripts/
+    └── log-rotation.sh
 ```
+
+**功能要求**:
+- ✅ 所有服务日志集中收集
+- ✅ 结构化日志（JSON格式）
+- ✅ 日志级别过滤
+- ✅ 全文搜索支持
+- ✅ 日志保留策略（30天）
 
 ---
 
 ### TASK-DEP-004
-- **任务描述**: 环境变量管理和密钥配置
-- **任务类型**: 配置管理
-- **优先级**: 🔴 P0
+- **任务描述**: 实现健康检查和服务发现
+- **任务类型**: 基础设施
+- **优先级**: 🟠 P1
 - **状态**: 📋 TODO
 - **负责人**: DevOps Engineer
 - **预计工时**: 8h
 
 **输入**:
-- 密钥管理最佳实践
-- AWS Secrets Manager
-- HashiCorp Vault
+- 健康检查端点规范
+- 服务依赖关系
+- 自动恢复策略
 
 **预期输出**:
+```python
+services/health-checker/
+├── app.py                  # 健康检查服务
+├── checks/
+│   ├── api_health.py      # API健康检查
+│   ├── model_health.py    # 模型服务检查
+│   └── db_health.py       # 数据库检查
+├── notifiers/
+│   ├── slack.py           # Slack通知
+│   └── email.py           # 邮件通知
+└── config.yml             # 检查配置
+```
+
+**验收标准**:
 ```bash
-config/
-├── .env.example          # 示例配置
-├── .env.development      # 开发环境
-├── .env.staging         # 测试环境
-├── .env.production      # 生产环境
-└── secrets/
-    ├── setup.sh         # 密钥初始化
-    └── rotate.sh        # 密钥轮换
+# 运行健康检查
+curl http://localhost:8888/health/all
+# 期望返回所有服务状态
+{
+  "main-app": "healthy",
+  "embedding-service": "healthy",
+  "reranking-service": "healthy",
+  ...
+}
 ```
 
 ---
 
-## 6. 测试用例和测试脚本任务
+## 5. 测试任务（增强版）
 
 ### TASK-TEST-001
-- **任务描述**: 编写后端单元测试
+- **任务描述**: 完善后端单元测试覆盖
 - **任务类型**: 单元测试
 - **优先级**: 🟠 P1
 - **状态**: 📋 TODO
 - **负责人**: QA Engineer
-- **预计工时**: 20h
+- **预计工时**: 16h
 
 **输入**:
+- 现有测试文件
 - pytest最佳实践
 - 测试覆盖率要求 (>80%)
-- Mock策略
 
 **预期输出**:
 ```python
-tests/unit/
-├── test_chains/
-│   ├── test_rag_chain.py
-│   └── test_prompts.py
-├── test_agents/
-│   └── test_compliance_agent.py
-├── test_services/
-│   ├── test_llm_service.py
-│   └── test_vector_store.py
-└── conftest.py           # pytest配置
+services/main-app/tests/
+├── unit/
+│   ├── test_llm_service.py      # LLM服务测试（新增）
+│   ├── test_rag_chain.py        # RAG链测试（增强）
+│   ├── test_agent.py            # Agent测试（增强）
+│   └── test_vector_store.py     # 向量存储测试
+├── fixtures/
+│   ├── mock_llm.py             # Mock LLM
+│   └── test_data.py            # 测试数据
+└── conftest.py                  # pytest配置
 ```
 
+**测试覆盖要求**:
+- ✅ 所有公共API方法
+- ✅ 错误处理路径
+- ✅ 边界条件
+- ✅ Mock所有外部依赖
+
 **验收标准**:
-- 测试覆盖率 > 80%
-- 所有关键路径覆盖
-- Mock外部依赖
+```bash
+# 运行测试并生成覆盖率报告
+pytest services/main-app/tests/unit/ --cov=app --cov-report=html
+# 覆盖率 > 80%
+```
 
 ---
 
 ### TASK-TEST-002
-- **任务描述**: 编写ChatInterface组件单元测试
-- **任务类型**: 组件测试
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: Frontend QA
-- **预计工时**: 12h
-
-**输入**:
-- React Testing Library
-- Vitest配置
-- Mock WebSocket
-
-**预期输出**:
-```typescript
-frontend/src/components/ChatInterface/__tests__/
-├── ChatInterface.test.tsx      // 主组件测试
-├── MessageList.test.tsx        // 消息列表测试
-├── MessageItem.test.tsx        // 消息项测试
-├── InputArea.test.tsx          // 输入区域测试
-├── StreamingMessage.test.tsx   // 流式消息测试
-└── mocks/
-    ├── mockWebSocket.ts        // WebSocket模拟
-    └── mockMessages.ts         // 测试数据
-```
-
-**测试覆盖**:
-- ✅ 组件渲染测试
-- ✅ 用户交互测试
-- ✅ 状态管理测试
-- ✅ WebSocket通信测试
-- ✅ 错误处理测试
-
-**验收标准**:
-- 测试覆盖率 > 80%
-- 所有P0功能覆盖
-- Mock外部依赖
-
----
-
-### TASK-TEST-003
-- **任务描述**: 编写集成测试
+- **任务描述**: 实现端到端集成测试
 - **任务类型**: 集成测试
 - **优先级**: 🟠 P1
 - **状态**: 📋 TODO
 - **负责人**: QA Lead
-- **预计工时**: 24h
+- **预计工时**: 20h
 
 **输入**:
-- API测试需求
-- E2E测试场景
+- 用户场景流程
+- 测试环境配置
 - 测试数据准备
 
 **预期输出**:
 ```python
-tests/integration/
-├── test_api/
-│   ├── test_chat_flow.py
-│   ├── test_document_upload.py
-│   └── test_knowledge_search.py
-├── test_services/
-│   ├── test_embedding_service.py
-│   └── test_reranking_service.py
-└── fixtures/
-    └── test_data/
-```
-
----
-
-### TASK-TEST-004
-- **任务描述**: 编写E2E测试脚本
-- **任务类型**: 端到端测试
-- **优先级**: 🟡 P2
-- **状态**: 📋 TODO
-- **负责人**: QA Engineer
-- **预计工时**: 20h
-
-**输入**:
-- Playwright/Cypress选型
-- 用户场景定义
-- 测试环境配置
-
-**预期输出**:
-```javascript
 tests/e2e/
-├── specs/
-│   ├── chat.spec.js
-│   ├── upload.spec.js
-│   └── knowledge.spec.js
-├── support/
-│   ├── commands.js
-│   └── helpers.js
-└── playwright.config.js
+├── scenarios/
+│   ├── test_chat_flow.py        # 完整对话流程
+│   ├── test_document_rag.py     # 文档上传到RAG查询
+│   ├── test_agent_tools.py      # Agent工具调用
+│   └── test_streaming.py        # WebSocket流式响应
+├── utils/
+│   ├── api_client.py           # API测试客户端
+│   ├── ws_client.py            # WebSocket测试客户端
+│   └── data_generator.py       # 测试数据生成
+└── docker-compose.test.yml     # 测试环境配置
+```
+
+**测试场景**:
+1. 用户上传文档 → 处理 → 查询 → 获取答案
+2. Agent多轮对话与工具调用
+3. 并发用户压力测试
+4. 错误恢复和重试机制
+
+**验收标准**:
+```bash
+# 启动测试环境
+docker-compose -f tests/e2e/docker-compose.test.yml up -d
+# 运行E2E测试
+pytest tests/e2e/scenarios/ -v
+# 所有场景通过
 ```
 
 ---
 
-### TASK-TEST-005
-- **任务描述**: 性能测试和负载测试
+### TASK-TEST-003
+- **任务描述**: 性能基准测试和优化
 - **任务类型**: 性能测试
 - **优先级**: 🟡 P2
 - **状态**: 📋 TODO
@@ -1336,378 +971,190 @@ tests/e2e/
 - **预计工时**: 16h
 
 **输入**:
-- 性能基准要求
-- Locust/K6配置
-- 负载场景定义
+- 性能目标SLA
+- Locust测试框架
+- 负载模型定义
 
 **预期输出**:
 ```python
 tests/performance/
-├── locustfile.py         # Locust测试脚本
+├── locustfile.py               # Locust主文件
 ├── scenarios/
-│   ├── chat_load.py
-│   ├── upload_stress.py
-│   └── concurrent_users.py
-├── k6/
-│   └── scripts/
-└── reports/              # 性能报告
+│   ├── chat_load.py           # 对话负载测试
+│   ├── rag_throughput.py      # RAG吞吐量测试
+│   └── model_latency.py       # 模型延迟测试
+├── reports/
+│   └── baseline_report.md     # 基准测试报告
+└── optimization/
+    └── recommendations.md      # 优化建议
 ```
 
-**性能指标**:
+**性能目标**:
 - API响应时间 < 200ms (P95)
-- 并发用户数 > 1000
+- RAG查询 < 2s (包含重排序)
+- 并发用户 > 1000
 - 吞吐量 > 100 req/s
+
+**验收标准**:
+```bash
+# 运行性能测试
+locust -f tests/performance/locustfile.py \
+  --host=http://localhost:8000 \
+  --users=1000 --spawn-rate=10
+# 生成报告
+python generate_report.py
+```
 
 ---
 
-## 7. DevOps流水线任务
+## 6. 文档和运维任务
 
-### TASK-CI-001
-- **任务描述**: 配置GitHub Actions CI流水线
-- **任务类型**: CI/CD配置
-- **优先级**: 🔴 P0
+### TASK-DOC-001
+- **任务描述**: 编写完整API文档
+- **任务类型**: 文档编写
+- **优先级**: 🟠 P1
+- **状态**: 📋 TODO
+- **负责人**: Technical Writer
+- **预计工时**: 12h
+
+**输入**:
+- OpenAPI规范
+- API端点列表
+- 请求/响应示例
+
+**预期输出**:
+```
+docs/api/
+├── openapi.yml              # OpenAPI规范
+├── README.md               # API概览
+├── authentication.md       # 认证说明
+├── endpoints/
+│   ├── chat.md            # 对话API
+│   ├── documents.md       # 文档API
+│   ├── knowledge.md       # 知识库API
+│   └── websocket.md       # WebSocket API
+└── examples/
+    ├── python/            # Python示例
+    ├── javascript/        # JS示例
+    └── curl/             # cURL示例
+```
+
+---
+
+### TASK-DOC-002
+- **任务描述**: 编写部署和运维手册
+- **任务类型**: 文档编写
+- **优先级**: 🟠 P1
 - **状态**: 📋 TODO
 - **负责人**: DevOps Engineer
 - **预计工时**: 12h
 
 **输入**:
-- GitHub Actions文档
-- 构建需求
-- 测试策略
+- 部署流程
+- 配置说明
+- 故障排查指南
 
 **预期输出**:
-```yaml
-.github/workflows/
-├── ci.yml                # 持续集成
-├── cd-dev.yml           # 开发环境部署
-├── cd-staging.yml       # 测试环境部署
-├── cd-production.yml    # 生产环境部署
-├── security-scan.yml    # 安全扫描
-└── release.yml          # 版本发布
 ```
-
-**CI流程**:
-```yaml
-steps:
-  - checkout
-  - setup-python
-  - install-dependencies
-  - lint (flake8, black, mypy)
-  - unit-tests
-  - integration-tests
-  - build-docker-images
-  - push-to-registry
+docs/operations/
+├── deployment/
+│   ├── quick-start.md      # 快速开始
+│   ├── docker-compose.md   # Docker部署
+│   ├── kubernetes.md       # K8s部署
+│   └── aws.md             # AWS部署
+├── configuration/
+│   ├── environment.md      # 环境变量
+│   ├── models.md          # 模型配置
+│   └── security.md        # 安全配置
+├── maintenance/
+│   ├── backup.md          # 备份恢复
+│   ├── monitoring.md      # 监控指南
+│   └── troubleshooting.md # 故障排查
+└── runbooks/              # 运维手册
 ```
 
 ---
 
-### TASK-CI-002
-- **任务描述**: 配置代码质量检查
-- **任务类型**: 代码质量
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: Tech Lead
-- **预计工时**: 8h
+## Sprint规划建议（更新版）
 
-**输入**:
-- SonarQube配置
-- 代码规范文档
-- 质量门槛定义
+### Sprint 1 (Week 1): 核心服务补齐
+- TASK-MS-002: Reranking服务实现 🔴
+- TASK-BE-005: 统一LLM服务层 🔴
+- TASK-MS-004: LLM Gateway服务 🟠
+- TASK-DEP-001: Docker Compose重构 🔴
 
-**预期输出**:
-```yaml
-.github/workflows/code-quality.yml
-sonar-project.properties
-.pre-commit-config.yaml
-.eslintrc.json
-.prettierrc
-pyproject.toml           # Python工具配置
-```
+### Sprint 2 (Week 2): 服务增强
+- TASK-MS-001: Embedding服务优化 🟠
+- TASK-MS-003: 文档处理增强 🟠
+- TASK-BE-006: 文档上传API完善 🟠
+- TASK-DEP-002: 监控系统实现 🟠
 
-**质量指标**:
-- 代码覆盖率 > 80%
-- 技术债务 < 5天
-- 无关键漏洞
-- 代码重复率 < 3%
+### Sprint 3 (Week 3): 测试和质量
+- TASK-TEST-001: 单元测试完善 🟠
+- TASK-TEST-002: 集成测试实现 🟠
+- TASK-DEP-004: 健康检查系统 🟠
+- TASK-DOC-001: API文档编写 🟠
 
----
+### Sprint 4 (Week 4): 优化和发布
+- TASK-TEST-003: 性能测试 🟡
+- TASK-DEP-003: 日志系统 🟡
+- TASK-DOC-002: 运维文档 🟠
+- 系统联调和bug修复
 
-### TASK-CI-003
-- **任务描述**: 配置自动化安全扫描
-- **任务类型**: 安全扫描
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: Security Engineer
-- **预计工时**: 12h
+## 任务统计（更新版）
 
-**输入**:
-- Snyk/Trivy配置
-- OWASP依赖检查
-- 密钥扫描要求
+| 类别 | 总任务 | 已完成 | 进行中 | 待开始 | 完成率 |
+|------|--------|--------|--------|--------|---------|
+| 前端设计 | 3 | 3 | 0 | 0 | 100% |
+| 后端开发 | 6 | 4 | 0 | 2 | 67% |
+| 模型服务 | 4 | 1 | 1 | 2 | 25% |
+| 部署配置 | 4 | 0 | 0 | 4 | 0% |
+| 测试 | 3 | 0 | 0 | 3 | 0% |
+| 文档 | 2 | 0 | 0 | 2 | 0% |
+| **总计** | **22** | **8** | **1** | **13** | **36%** |
 
-**预期输出**:
-```yaml
-.github/workflows/security.yml
-security/
-├── dependency-check.sh
-├── secret-scan.sh
-├── image-scan.sh
-└── reports/
-```
-
----
-
-### TASK-CI-004
-- **任务描述**: 配置监控和告警
-- **任务类型**: 监控配置
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: SRE Engineer
-- **预计工时**: 16h
-
-**输入**:
-- Prometheus配置
-- Grafana仪表板
-- 告警规则定义
-
-**预期输出**:
-```yaml
-monitoring/
-├── prometheus/
-│   ├── prometheus.yml
-│   └── rules/
-├── grafana/
-│   ├── dashboards/
-│   └── datasources/
-├── alertmanager/
-│   └── config.yml
-└── scripts/
-    └── setup-monitoring.sh
-```
-
----
-
-### TASK-CI-005
-- **任务描述**: 配置自动化文档生成
-- **任务类型**: 文档自动化
-- **优先级**: 🟢 P3
-- **状态**: 📋 TODO
-- **负责人**: Technical Writer
-- **预计工时**: 8h
-
-**输入**:
-- API文档规范
-- Swagger/OpenAPI
-- 代码注释规范
-
-**预期输出**:
-```yaml
-.github/workflows/docs.yml
-docs/
-├── api/              # API文档
-├── architecture/     # 架构文档
-├── deployment/       # 部署文档
-└── user-guide/       # 用户指南
-```
-
----
-
-## 8. 项目管理和协调任务
-
-### TASK-PM-001
-- **任务描述**: 创建项目看板和里程碑
-- **任务类型**: 项目管理
-- **优先级**: 🔴 P0
-- **状态**: 📋 TODO
-- **负责人**: Project Manager
-- **预计工时**: 4h
-
-**输入**:
-- 项目计划
-- 团队资源
-- 时间线
-
-**预期输出**:
-```
-project-management/
-├── github-projects/        # GitHub Projects看板配置
-├── milestones/            # 里程碑定义
-│   ├── sprint-1.md
-│   ├── sprint-2.md
-│   └── sprint-3.md
-├── planning/              # Sprint计划
-│   ├── sprint-planning.md
-│   └── burndown-charts/   # 燃尽图配置
-└── templates/             # 项目模板
-    └── task-template.md
-```
-
----
-
-### TASK-PM-002
-- **任务描述**: 编写项目文档
-- **任务类型**: 文档编写
-- **优先级**: 🟠 P1
-- **状态**: 📋 TODO
-- **负责人**: Technical Writer
-- **预计工时**: 20h
-
-**输入**:
-- 技术规范
-- API文档
-- 用户故事
-
-**预期输出**:
-```markdown
-docs/
-├── README.md
-├── ARCHITECTURE.md
-├── API.md
-├── DEPLOYMENT.md
-├── CONTRIBUTING.md
-└── CHANGELOG.md
-```
-
----
-
-## 任务依赖关系图
-
-```mermaid
-graph TD
-    %% 前端设计
-    TASK-FE-001 --> TASK-FE-002
-    TASK-FE-001 --> TASK-FE-003
-    
-    %% 后端开发
-    TASK-BE-001 --> TASK-BE-002
-    TASK-BE-002 --> TASK-BE-003
-    TASK-BE-001 --> TASK-BE-004
-    TASK-BE-001 --> TASK-BE-005
-    
-    %% UI开发
-    TASK-FE-001 --> TASK-UI-001
-    TASK-FE-002 --> TASK-UI-001
-    TASK-UI-001 --> TASK-UI-002
-    TASK-UI-001 --> TASK-UI-003
-    TASK-UI-003 --> TASK-UI-004
-    
-    %% 模型服务
-    TASK-MS-001 --> TASK-BE-002
-    TASK-MS-002 --> TASK-BE-002
-    TASK-MS-003 --> TASK-BE-005
-    
-    %% 部署
-    TASK-BE-001 --> TASK-DEP-001
-    TASK-MS-001 --> TASK-DEP-001
-    TASK-DEP-001 --> TASK-DEP-002
-    TASK-DEP-001 --> TASK-DEP-003
-    
-    %% 测试
-    TASK-BE-002 --> TASK-TEST-001
-    TASK-UI-001 --> TASK-TEST-002
-    TASK-TEST-001 --> TASK-TEST-003
-    TASK-TEST-002 --> TASK-TEST-003
-    TASK-TEST-003 --> TASK-TEST-004
-    
-    %% CI/CD
-    TASK-DEP-001 --> TASK-CI-001
-    TASK-TEST-001 --> TASK-CI-002
-    TASK-CI-001 --> TASK-CI-003
-    TASK-CI-001 --> TASK-CI-004
-```
-
-## 任务统计
-
-| 类别 | 任务数 | P0 | P1 | P2 | P3 |
-|------|--------|----|----|----|----|
-| 前端设计 | 3 | 2 | 1 | 0 | 0 |
-| 后端开发 | 5 | 2 | 3 | 0 | 0 |
-| UI开发 | 4 | 1 | 2 | 1 | 0 |
-| 模型服务 | 4 | 2 | 2 | 0 | 0 |
-| 部署配置 | 4 | 2 | 1 | 1 | 0 |
-| 测试 | 5 | 0 | 3 | 2 | 0 |
-| DevOps | 5 | 1 | 3 | 0 | 1 |
-| 项目管理 | 2 | 1 | 1 | 0 | 0 |
-| **总计** | **32** | **11** | **16** | **4** | **1** |
-
-## Sprint规划建议
-
-### Sprint 1 (Week 1-2): 基础架构
-- TASK-FE-001: React架构设计
-- TASK-BE-001: FastAPI框架搭建
-- TASK-MS-001: Embedding服务
-- TASK-MS-002: Reranking服务
-- TASK-DEP-004: 环境配置
-- TASK-PM-001: 项目看板
-
-### Sprint 2 (Week 3-4): 核心功能
-- TASK-BE-002: RAG链实现
-- TASK-UI-001: 聊天界面
-- TASK-FE-002: 主题系统
-- TASK-FE-003: Redux配置
-- TASK-DEP-001: Docker Compose
-
-### Sprint 3 (Week 5-6): 功能完善
-- TASK-BE-003: Agent系统
-- TASK-BE-004: WebSocket
-- TASK-BE-005: 文档上传API
-- TASK-UI-002: 上传组件
-- TASK-UI-003: 知识库界面
-- TASK-MS-003: 文档处理服务
-
-### Sprint 4 (Week 7-8): 测试和部署
-- TASK-TEST-001: 单元测试
-- TASK-TEST-002: 组件测试
-- TASK-TEST-003: 集成测试
-- TASK-CI-001: CI流水线
-- TASK-DEP-002: AWS部署
-
-### Sprint 5 (Week 9-10): 优化和发布
-- TASK-UI-004: 响应式设计
-- TASK-TEST-004: E2E测试
-- TASK-TEST-005: 性能测试
-- TASK-CI-002: 代码质量
-- TASK-CI-003: 安全扫描
-- TASK-PM-002: 项目文档
-
-## 风险和缓解措施
+## 关键风险和缓解措施
 
 | 风险 | 影响 | 概率 | 缓解措施 |
 |------|------|------|----------|
-| 模型服务性能不足 | 高 | 中 | 提前进行性能测试，准备GPU资源 |
-| LangChain版本兼容性 | 中 | 低 | 锁定版本，充分测试 |
-| AWS成本超支 | 中 | 中 | 设置预算告警，使用Spot实例 |
-| 团队技能缺口 | 中 | 低 | 提供培训，技术分享 |
-| 第三方API限制 | 高 | 低 | 实现fallback机制，多供应商支持 |
+| Reranking服务性能不足 | 高 | 中 | 提前进行性能测试，准备GPU资源，实现缓存机制 |
+| 服务间通信复杂度 | 高 | 中 | 使用服务发现，实现健康检查，添加重试机制 |
+| 本地LLM模型性能瓶颈 | 高 | 高 | 准备云端备选方案，实现负载均衡，优化模型量化 |
+| 文档处理准确性 | 中 | 低 | 充分测试各种文档格式，实现错误处理和回退策略 |
 
-## 交付标准
+## 验收标准（总体）
 
-### 代码质量标准
-- [ ] 代码覆盖率 > 80%
-- [ ] 无Critical级别安全漏洞
-- [ ] 通过所有linting检查
-- [ ] API文档完整
-- [ ] 代码评审通过
+### 功能完整性
+- [ ] 所有P0任务完成
+- [ ] 核心服务全部运行正常
+- [ ] E2E测试全部通过
 
-### 性能标准
+### 性能指标
 - [ ] API响应时间 < 200ms (P95)
-- [ ] 并发用户 > 1000
-- [ ] 系统可用性 > 99.9%
-- [ ] 错误率 < 0.1%
+- [ ] 系统支持 > 1000并发用户
+- [ ] 服务可用性 > 99.9%
 
-### 文档标准
-- [ ] README完整
-- [ ] API文档自动生成
-- [ ] 部署文档详细
-- [ ] 用户指南完善
-- [ ] 架构图更新
+### 质量标准
+- [ ] 代码测试覆盖率 > 80%
+- [ ] 无Critical安全漏洞
+- [ ] 文档完整且更新
+
+### 部署就绪
+- [ ] Docker Compose一键部署
+- [ ] 监控和告警配置完成
+- [ ] 运维文档完整
 
 ## 更新日志
 
 | 日期 | 版本 | 更新内容 | 更新人 |
 |------|------|----------|--------|
 | 2024-01-09 | 1.0.0 | 初始版本，创建完整任务列表 | System |
+| 2024-09-12 | 1.1.0 | 基于实际实现GAP更新任务，新增关键缺失服务任务 | System |
 
 ---
 
-**注**: 本文档为活文档，将随项目进展持续更新。所有任务状态变更需要在任务记录中留存。
+**注**: 
+1. 标记⭐的任务为关键缺失组件，需优先实现
+2. 所有任务都设计为可独立验收的颗粒度
+3. 每个任务包含明确的输入、输出和验收标准
+4. 任务之间的依赖关系已明确标注

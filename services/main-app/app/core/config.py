@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = Field(default=0, env="DATABASE_MAX_OVERFLOW")
     
     # Redis (for caching and rate limiting)
+    REDIS_ENABLED: bool = Field(default=False, env="REDIS_ENABLED")
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
         env="REDIS_URL"
@@ -90,6 +91,7 @@ class Settings(BaseSettings):
         env="EMBEDDING_MODEL"
     )
     EMBEDDING_API_KEY: Optional[str] = Field(default=None, env="EMBEDDING_API_KEY")
+    EMBEDDING_API_BASE: Optional[str] = Field(default="http://localhost:8002", env="EMBEDDING_API_BASE")
     EMBEDDING_DIMENSIONS: int = Field(default=1536, env="EMBEDDING_DIMENSIONS")
     EMBEDDING_BATCH_SIZE: int = Field(default=100, env="EMBEDDING_BATCH_SIZE")
     
@@ -157,6 +159,27 @@ class Settings(BaseSettings):
     ENABLE_MEMORY: bool = Field(default=True, env="ENABLE_MEMORY")
     ENABLE_TOOLS: bool = Field(default=True, env="ENABLE_TOOLS")
     ENABLE_AGENT: bool = Field(default=True, env="ENABLE_AGENT")
+    
+    # Lowercase properties for compatibility
+    @property
+    def vector_store_type(self):
+        return self.VECTOR_STORE_TYPE
+    
+    @property
+    def chroma_persist_directory(self):
+        return self.CHROMA_PERSIST_DIRECTORY
+    
+    @property
+    def openai_api_key(self):
+        return self.LLM_API_KEY
+    
+    @property
+    def openai_api_base(self):
+        return self.LLM_BASE_URL
+    
+    @property
+    def embedding_api_base(self):
+        return self.EMBEDDING_API_BASE if hasattr(self, 'EMBEDDING_API_BASE') else "http://localhost:8002"
     
     @field_validator("ENVIRONMENT")
     @classmethod

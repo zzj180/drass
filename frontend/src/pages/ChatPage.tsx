@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Typography, Paper } from '@mui/material';
+import { Box } from '@mui/material';
+import { ChatInterface } from '../components/ChatInterface/ChatInterface';
 
 /**
  * Chat page component - Main interface for chatting with the compliance assistant
@@ -7,12 +8,10 @@ import { Box, Typography, Paper } from '@mui/material';
 const ChatPage: React.FC = () => {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Typography variant="h4" gutterBottom>
-        Compliance Chat Assistant
-      </Typography>
-      <Paper sx={{ flex: 1, p: 2 }}>
-        <Typography>Chat interface will be implemented here</Typography>
-      </Paper>
+      <ChatInterface 
+        sessionId="default-session"
+        userId="test-user"
+      />
     </Box>
   );
 };

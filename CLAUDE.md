@@ -12,6 +12,15 @@ Drass is a hybrid Dify + LangChain compliance assistant platform that combines:
 
 ## Development Commands
 
+### Quick Start
+```bash
+# Full stack with local LLM
+python qwen3_api_server.py &        # Start local LLM server (port 8001)
+docker-compose up -d                 # Start Docker services
+cd services/main-app && uvicorn app.main:app --reload --port 8000 &
+cd frontend && npm run dev          # Start frontend (port 5173)
+```
+
 ### Local LLM Model Setup (Qwen3-8B with MLX)
 ```bash
 # Convert and run Qwen3-8B model
@@ -43,6 +52,7 @@ uvicorn app.main:app --reload      # Run development server
 pytest                              # Run all tests
 pytest app/chains/tests/ -v        # Run specific test directory
 pytest -m integration               # Run integration tests only
+pytest app/chains/tests/test_rag_chain.py::test_multi_query_generation -v  # Run single test
 ```
 
 ### Docker Services
@@ -71,17 +81,15 @@ python scripts/figma_webhook.py                     # Start webhook server
 
 ### Testing Commands
 
-#### Backend Unit Tests
 ```bash
+# Backend Tests
 cd services/main-app
 pytest -v                                    # Run all tests with verbose output
 pytest app/chains/tests/test_rag_chain.py   # Run specific test file
 pytest -k "test_multi_query"                # Run tests matching pattern
 pytest --cov=app --cov-report=html          # Generate coverage report
-```
 
-#### Frontend Tests
-```bash
+# Frontend Tests
 cd frontend
 npm run test                                # Run tests in watch mode
 npm run test:ui                             # Run tests with UI
@@ -200,30 +208,13 @@ npm test -- --run                           # Run tests once (CI mode)
 
 ### Common Development Workflows
 
-#### Starting the Full Stack with Local LLM
-```bash
-# Start local Qwen3-8B model server
-python qwen3_api_server.py  # Runs on port 8001
-
-# Start all Docker services (Dify, PostgreSQL, Redis, Weaviate)
-docker-compose up -d
-
-# Start backend API server
-cd services/main-app
-uvicorn app.main:app --reload --port 8000
-
-# Start frontend development server
-cd frontend
-npm run dev
-```
-
-#### Adding a New LangChain Tool
+**Adding a New LangChain Tool**
 1. Create tool in `services/main-app/app/agents/tools/`
 2. Register in `services/main-app/app/agents/tool_registry.py`
 3. Update agent configuration in `compliance_agent.py`
 4. Add tests in corresponding `tests/` directory
 
-#### Modifying the RAG Pipeline
+**Modifying the RAG Pipeline**
 1. Core logic: `services/main-app/app/chains/compliance_rag_chain.py`
 2. Prompts: `services/main-app/app/chains/prompts.py`
 3. Retrieval config: `services/main-app/app/core/config.py` (embedding/reranking settings)

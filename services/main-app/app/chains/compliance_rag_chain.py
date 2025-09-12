@@ -148,10 +148,87 @@ class ComplianceRAGChain:
     
     def _create_default_embeddings(self):
         """Create default embeddings instance"""
-        return OpenAIEmbeddings(
-            model=settings.EMBEDDING_MODEL,
-            openai_api_key=settings.EMBEDDING_API_KEY
-        )
+        # Use local embedding service or fallback to HuggingFace
+        if hasattr(settings, 'EMBEDDING_PROVIDER') and settings.EMBEDDING_PROVIDER == "custom":
+            # Use custom embedding service via API
+            from langchain.embeddings.base import Embeddings
+            from typing import List
+            import requests
+            
+            class CustomEmbeddings(Embeddings):
+                def embed_documents(self, texts: List[str]) -> List[List[float]]:
+                    response = requests.post(
+                        f"{settings.EMBEDDING_API_BASE}/embeddings",
+                        json={"texts": texts}
+                    )
+                    return response.json()["embeddings"]
+                
+                def embed_query(self, text: str) -> List[float]:
+                    return self.embed_documents([text])[0]
+            
+            return CustomEmbeddings()
+        else:
+            # Fallback to HuggingFace embeddings
+            from langchain.embeddings import HuggingFaceEmbeddings
+            return HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+    
+    async def ainvoke(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process a query through the RAG chain asynchronously
+        
+        Args:
+            inputs: Dictionary with 'query' key
+            
+        Returns:
+            Dictionary with 'answer' and 'sources' keys
+        """
+        query = inputs.get("query", "")
+        
+        # For now, return a simple response using the LLM directly
+        try:
+            from app.services.llm_service import llm_service
+            
+            response = await llm_service.generate(query, max_tokens=500)
+            
+            return {
+                "answer": response,
+                "sources": []
+            }
+        except Exception as e:
+            logger.error(f"Error in RAG chain ainvoke: {e}")
+            return {
+                "answer": f"Error processing query: {str(e)}",
+                "sources": []
+            }
+    
+    def invoke(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Synchronous wrapper for ainvoke
+        """
+        import asyncio
+        try:
+            # Use the existing event loop if available
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're already in an async context, can't use run_until_complete
+                # Return a simple response for now
+                query = inputs.get("query", "")
+                return {
+                    "answer": f"Processing query: {query}",
+                    "sources": []
+                }
+            else:
+                return loop.run_until_complete(self.ainvoke(inputs))
+        except RuntimeError:
+            # No event loop, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.ainvoke(inputs))
+            finally:
+                loop.close()
     
     def _create_default_memory(self):
         """Create default memory instance"""

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 from typing import Dict, Any
 
-from app.api.v1 import chat, knowledge, documents, auth, settings
+from app.api.v1 import chat, knowledge, documents, auth, settings, test
 from app.core.config import settings as app_settings
 from app.core.logging import setup_logging
 from app.middleware.error_handler import error_handler_middleware
@@ -34,20 +34,26 @@ async def lifespan(app: FastAPI):
         await vector_store_service.initialize()
         logger.info("Vector store connection initialized")
         
-        # Initialize LLM service
-        from app.services.llm_service import llm_service
-        await llm_service.initialize()
-        logger.info("LLM service initialized")
+        # Initialize unified LLM service
+        from app.services.llm_service_enhanced import unified_llm_service
+        await unified_llm_service.initialize()
+        logger.info("Unified LLM service initialized with multiple providers")
         
         # Initialize embedding service
         from app.services.embedding_service import embedding_service
         await embedding_service.initialize()
         logger.info("Embedding service initialized")
         
-        # Initialize WebSocket message broker
-        from app.api.v1.message_queue import message_broker
-        await message_broker.initialize()
-        logger.info("WebSocket message broker initialized")
+        # Initialize WebSocket message broker (only if Redis is enabled)
+        if getattr(app_settings, 'REDIS_ENABLED', True):
+            try:
+                from app.api.v1.message_queue import message_broker
+                await message_broker.initialize()
+                logger.info("WebSocket message broker initialized")
+            except Exception as e:
+                logger.warning(f"WebSocket message broker initialization failed (Redis may be disabled): {e}")
+        else:
+            logger.info("WebSocket message broker skipped (Redis disabled)")
         
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
@@ -61,9 +67,14 @@ async def lifespan(app: FastAPI):
     # Cleanup connections
     try:
         await vector_store_service.close()
-        await llm_service.close()
+        await unified_llm_service.close()
         await embedding_service.close()
-        await message_broker.shutdown()
+        if getattr(app_settings, 'REDIS_ENABLED', True):
+            try:
+                from app.api.v1.message_queue import message_broker
+                await message_broker.shutdown()
+            except Exception as e:
+                logger.warning(f"Error shutting down message broker: {e}")
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 
@@ -99,6 +110,7 @@ app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledge"])
 app.include_router(documents.router, prefix="/api/v1/documents", tags=["documents"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
+app.include_router(test.router, prefix="/api/v1/test", tags=["test"])
 
 # Include WebSocket routers
 from app.api.v1 import websocket

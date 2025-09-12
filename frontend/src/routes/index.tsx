@@ -9,6 +9,7 @@ const DocumentsPage = lazy(() => import('@/pages/DocumentsPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+const TestPage = lazy(() => import('@/pages/TestPage'));
 
 // Loading component
 const LoadingFallback = () => (
@@ -30,7 +31,8 @@ const AppRoutes: React.FC = () => {
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         {/* Main routes */}
-        <Route path="/" element={<Navigate to="/chat" replace />} />
+        <Route path="/" element={<Navigate to="/test" replace />} />
+        <Route path="/test" element={<TestPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/knowledge" element={<KnowledgeBasePage />} />
         <Route path="/documents" element={<DocumentsPage />} />
