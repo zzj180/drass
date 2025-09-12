@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { MessageList } from './MessageList';
-import { InputArea } from './InputArea';
+import { InputArea, AttachedFile, AttachmentPurpose } from './InputArea';
 import { ChatInterfaceProps, Message } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -50,6 +50,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 
   // Handle message actions
   const handleMessageAction = useCallback(
@@ -114,14 +115,42 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     
-    // Make API call to backend
     try {
-      const response = await fetch('http://localhost:8080/api/v1/chat', {
+      // 分离不同用途的附件
+      const knowledgeBaseFiles = attachedFiles.filter(af => af.purpose === 'knowledge_base');
+      const businessContextFiles = attachedFiles.filter(af => af.purpose === 'business_context');
+      
+      // 如果有知识库更新的附件，先处理知识库更新
+      if (knowledgeBaseFiles.length > 0) {
+        console.log('Updating knowledge base with files:', knowledgeBaseFiles.map(af => af.file.name));
+        // TODO: 实现知识库更新API调用
+        // await updateKnowledgeBase(knowledgeBaseFiles);
+      }
+      
+      // 准备请求数据
+      const requestData: any = { 
+        message: content,
+        attachments: businessContextFiles.map(af => ({
+          filename: af.file.name,
+          size: af.file.size,
+          type: af.file.type,
+          purpose: af.purpose
+        }))
+      };
+      
+      // 如果有业务上下文附件，添加文件内容
+      if (businessContextFiles.length > 0) {
+        // TODO: 实现文件内容读取和发送
+        console.log('Including business context files:', businessContextFiles.map(af => af.file.name));
+      }
+      
+      // Make API call to backend
+      const response = await fetch('http://localhost:8000/api/v1/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify(requestData),
       });
       
       if (!response.ok) {
@@ -139,6 +168,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
+      
+      // 清空已发送的附件
+      setAttachedFiles([]);
+      
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: Message = {
@@ -152,12 +185,68 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [attachedFiles]);
 
   // Handle file attachment
   const handleAttachment = useCallback(() => {
     console.log('File attachment clicked');
-    // TODO: Implement file attachment
+    
+    // Create a file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = '.pdf,.doc,.docx,.txt,.md,.json,.csv,.xlsx,.xls'; // Common document formats
+    
+    input.onchange = (event) => {
+      const files = (event.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        console.log(`Selected ${files.length} file(s):`, Array.from(files).map(f => f.name));
+        
+        const validFiles: AttachedFile[] = [];
+        
+        // Process each file
+        Array.from(files).forEach((file) => {
+          // Check file size
+          if (file.size > maxFileSize) {
+            console.error(`File ${file.name} is too large. Max size: ${maxFileSize} bytes`);
+            return;
+          }
+          
+          const attachedFile: AttachedFile = {
+            file,
+            purpose: 'business_context', // 默认用途
+            id: uuidv4()
+          };
+          
+          validFiles.push(attachedFile);
+          console.log(`File: ${file.name}, Size: ${file.size} bytes, Type: ${file.type}`);
+        });
+        
+        // Update attached files state
+        if (validFiles.length > 0) {
+          setAttachedFiles(prev => [...prev, ...validFiles]);
+        }
+      }
+    };
+    
+    // Trigger file selection dialog
+    input.click();
+  }, [maxFileSize]);
+
+  // Handle file removal
+  const handleRemoveFile = useCallback((index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Handle file purpose change
+  const handleFilePurposeChange = useCallback((fileId: string, purpose: AttachmentPurpose) => {
+    setAttachedFiles(prev => 
+      prev.map(attachedFile => 
+        attachedFile.id === fileId 
+          ? { ...attachedFile, purpose }
+          : attachedFile
+      )
+    );
   }, []);
 
   return (
@@ -235,6 +324,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <InputArea
           onSend={handleSendMessage}
           onAttach={handleAttachment}
+          onRemoveFile={handleRemoveFile}
+          onFilePurposeChange={handleFilePurposeChange}
+          attachedFiles={attachedFiles}
           placeholder={placeholder}
           maxLength={maxFileSize}
           isLoading={isLoading}
