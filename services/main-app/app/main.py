@@ -44,6 +44,16 @@ async def lifespan(app: FastAPI):
         await embedding_service.initialize()
         logger.info("Embedding service initialized")
         
+        # Initialize document service
+        from app.services.document_service import document_service
+        await document_service.initialize()
+        logger.info("Document service initialized")
+        
+        # Start document processor workers
+        from app.tasks.document_processor import document_processor
+        await document_processor.start()
+        logger.info("Document processor workers started")
+        
         # Initialize WebSocket message broker (only if Redis is enabled)
         if getattr(app_settings, 'REDIS_ENABLED', True):
             try:
@@ -66,6 +76,15 @@ async def lifespan(app: FastAPI):
     
     # Cleanup connections
     try:
+        # Stop document processor workers
+        from app.tasks.document_processor import document_processor
+        await document_processor.stop()
+        
+        # Close services
+        from app.services.document_service import document_service
+        from app.services.storage_service import storage_service
+        await storage_service.close()
+        
         await vector_store_service.close()
         await unified_llm_service.close()
         await embedding_service.close()
