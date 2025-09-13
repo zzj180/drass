@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { CircularProgress, Box } from '@mui/material';
+import { authService } from '../services/authService';
 
 // Lazy load pages for code splitting
 const ChatPage = lazy(() => import('@/pages/ChatPage'));
@@ -23,6 +24,12 @@ const LoadingFallback = () => (
   </Box>
 );
 
+// Protected Route component
+const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
+  const isAuthenticated = authService.isAuthenticated();
+  return isAuthenticated ? element : <Navigate to="/login" replace />;
+};
+
 /**
  * Application Routes Configuration
  */
@@ -30,17 +37,17 @@ const AppRoutes: React.FC = () => {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        {/* Main routes */}
-        <Route path="/" element={<Navigate to="/test" replace />} />
-        <Route path="/test" element={<TestPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/knowledge" element={<KnowledgeBasePage />} />
-        <Route path="/documents" element={<DocumentsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        
-        {/* Auth routes */}
+        {/* Main routes - Protected */}
+        <Route path="/" element={<ProtectedRoute element={<Navigate to="/test" replace />} />} />
+        <Route path="/test" element={<ProtectedRoute element={<TestPage />} />} />
+        <Route path="/chat" element={<ProtectedRoute element={<ChatPage />} />} />
+        <Route path="/knowledge" element={<ProtectedRoute element={<KnowledgeBasePage />} />} />
+        <Route path="/documents" element={<ProtectedRoute element={<DocumentsPage />} />} />
+        <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
+
+        {/* Auth routes - Public */}
         <Route path="/login" element={<LoginPage />} />
-        
+
         {/* 404 route */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -20,6 +20,7 @@ import { InputArea, AttachedFile, AttachmentPurpose } from './InputArea';
 import { ChatInterfaceProps, Message } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { getApiUrl } from '../../config/config';
+import { authService } from '../../services/authService';
 
 /**
  * Main ChatInterface component container
@@ -128,15 +129,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         // await updateKnowledgeBase(knowledgeBaseFiles);
       }
       
-      // 准备请求数据
-      const requestData: any = { 
-        message: content,
-        attachments: businessContextFiles.map(af => ({
-          filename: af.file.name,
-          size: af.file.size,
-          type: af.file.type,
-          purpose: af.purpose
-        }))
+      // 准备请求数据 - 匹配后端 ChatRequest 模型
+      const requestData = {
+        messages: [
+          ...messages.filter(m => m.role !== 'system').map(m => ({
+            role: m.role,
+            content: m.content
+          })),
+          {
+            role: 'user',
+            content: content
+          }
+        ],
+        stream: false,
+        use_knowledge_base: true
       };
       
       // 如果有业务上下文附件，添加文件内容
@@ -145,11 +151,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         console.log('Including business context files:', businessContextFiles.map(af => af.file.name));
       }
       
-      // Make API call to backend
+      // Make API call to backend with authentication
       const response = await fetch(`${getApiUrl('backendUrl')}/api/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authService.getAuthHeaders(),
         },
         body: JSON.stringify(requestData),
       });
@@ -159,12 +166,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
       
       const data = await response.json();
-      
+
       const assistantMessage: Message = {
-        id: uuidv4(),
+        id: data.id || uuidv4(),
         role: 'assistant',
-        content: data.response || 'No response from assistant',
-        timestamp: new Date(),
+        content: data.message?.content || 'No response from assistant',
+        timestamp: new Date(data.created_at || Date.now()),
         status: 'sent',
       };
       
