@@ -24,6 +24,10 @@ WORKDIR /app
 # 复制依赖文件
 COPY requirements.txt .
 
+# 配置pip使用阿里云镜像源以加速下载
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set install.trusted-host mirrors.aliyun.com
+
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 

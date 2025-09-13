@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
+# Configure pip to use Aliyun mirror for faster downloads in China
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set install.trusted-host mirrors.aliyun.com
+
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 

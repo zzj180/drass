@@ -260,42 +260,101 @@ export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
 
         {/* File Selection Area */}
         {!isUploading && uploadResults.length === 0 && (
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 3,
-              textAlign: 'center',
-              backgroundColor: 'background.default',
-              borderStyle: 'dashed',
-              borderWidth: 2,
-              cursor: 'pointer',
-              '&:hover': {
-                backgroundColor: 'action.hover',
-              },
-            }}
-            component="label"
-          >
-            <input
-              type="file"
-              multiple
-              hidden
-              onChange={handleFileSelect}
-              accept=".pdf,.doc,.docx,.txt,.md,.json,.csv,.xlsx,.xls"
-            />
-            <UploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" gutterBottom>
-              Click to select files or drag and drop
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Supported formats: PDF, DOC, DOCX, TXT, MD, JSON, CSV, XLSX, XLS
-            </Typography>
-            <Chip
-              label={uploadPurpose === 'knowledge_base' ? 'Knowledge Base' : 'Business Context'}
-              color="primary"
-              size="small"
-              sx={{ mt: 2 }}
-            />
-          </Paper>
+          <Box>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 4,
+                backgroundColor: 'background.default',
+                borderStyle: 'dashed',
+                borderWidth: 2,
+                borderColor: 'divider',
+                cursor: 'pointer',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '200px',
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                  borderColor: 'primary.main',
+                },
+              }}
+              component="label"
+            >
+              <input
+                type="file"
+                multiple
+                hidden
+                onChange={handleFileSelect}
+                accept=".pdf,.doc,.docx,.txt,.md,.json,.csv,.xlsx,.xls"
+              />
+
+              {/* Upload Icon with positioning */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: '24px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  backgroundColor: 'action.selected',
+                  borderRadius: '50%',
+                  width: '80px',
+                  height: '80px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <UploadIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+              </Box>
+
+              {/* Text content */}
+              <Box sx={{ mt: 10, textAlign: 'center' }}>
+                <Typography variant="h6" gutterBottom>
+                  Click to select files or drag and drop
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  Supported formats: PDF, DOC, DOCX, TXT, MD, JSON, CSV, XLSX, XLS
+                </Typography>
+              </Box>
+
+              {/* Purpose chip positioned at bottom left */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  bottom: '16px',
+                  left: '16px',
+                }}
+              >
+                <Chip
+                  label={uploadPurpose === 'knowledge_base' ? 'Knowledge Base' : 'Business Context'}
+                  color="primary"
+                  size="small"
+                />
+              </Box>
+            </Paper>
+
+            {/* Alternative: Add files button (optional) */}
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                component="label"
+                variant="outlined"
+                startIcon={<UploadIcon />}
+                size="small"
+              >
+                Browse Files
+                <input
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={handleFileSelect}
+                  accept=".pdf,.doc,.docx,.txt,.md,.json,.csv,.xlsx,.xls"
+                />
+              </Button>
+            </Box>
+          </Box>
         )}
 
         {/* Selected Files List */}
