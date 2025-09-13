@@ -49,7 +49,7 @@ fi
 print_warning "Checking for remaining processes on ports..."
 
 # Kill processes on specific ports
-for port in 8001 8080 8000 3000 5173; do
+for port in 8001 8002 8004 8005 8000 5173; do
     pids=$(lsof -ti:$port 2>/dev/null)
     if [ ! -z "$pids" ]; then
         print_warning "Killing processes on port $port: $pids"
@@ -60,8 +60,8 @@ done
 # Method 3: Kill by process name
 print_warning "Checking for remaining Python and Node processes..."
 pkill -f "qwen3_api_server.py" 2>/dev/null
-pkill -f "simple_backend.py" 2>/dev/null
-pkill -f "main-app/app/main.py" 2>/dev/null
+pkill -f "embedding-service/app.py" 2>/dev/null
+pkill -f "uvicorn app.main:app" 2>/dev/null
 pkill -f "vite" 2>/dev/null
 
 echo

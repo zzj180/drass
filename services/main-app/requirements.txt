@@ -28,7 +28,7 @@ chromadb==0.4.22
 
 # Embeddings and reranking
 cohere==4.39.0
-sentence-transformers==2.2.2
+sentence-transformers>=5.1.0
 
 # Document processing
 pypdf==3.17.4

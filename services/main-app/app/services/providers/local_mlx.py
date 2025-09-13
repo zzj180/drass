@@ -34,12 +34,15 @@ class LocalMLXProvider(BaseLLMProvider):
         
         # Test connection
         try:
-            response = await self.client.get("/health")
-            if response.status_code == 200:
-                self._initialized = True
-                logger.info(f"Local MLX provider initialized at {self.base_url}")
-            else:
-                raise Exception(f"MLX server not responding: {response.status_code}")
+            # For MLX server, health endpoint is at root, not under /v1
+            health_url = self.base_url.replace('/v1', '') + '/health'
+            async with httpx.AsyncClient() as temp_client:
+                response = await temp_client.get(health_url)
+                if response.status_code == 200:
+                    self._initialized = True
+                    logger.info(f"Local MLX provider initialized at {self.base_url}")
+                else:
+                    raise Exception(f"MLX server not responding: {response.status_code}")
         except httpx.ConnectError:
             logger.warning(f"MLX server not available at {self.base_url}")
             raise Exception(f"Cannot connect to MLX server at {self.base_url}")

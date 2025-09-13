@@ -14,34 +14,49 @@ Drass is a hybrid Dify + LangChain compliance assistant platform that combines:
 
 ### Quick Start
 ```bash
-# Full stack with local LLM
+# Full system startup (recommended)
+./start-system.sh                   # One-click startup for all services
+
+# Alternative: Manual startup
 python qwen3_api_server.py &        # Start local LLM server (port 8001)
-docker-compose up -d                 # Start Docker services
+cd services/embedding-service && python app.py &  # Start embedding service (port 8002)
 cd services/main-app && uvicorn app.main:app --reload --port 8000 &
 cd frontend && npm run dev          # Start frontend (port 5173)
+
+# Stop all services
+./stop-services.sh                  # Clean shutdown of all services
+```
+
+### Quick Testing
+```bash
+./quick_test.sh                     # Run smoke tests for all services
+./run_all_tests.sh                  # Run complete test suite
 ```
 
 ### Local LLM Model Setup (Qwen3-8B with MLX)
 ```bash
-# Convert and run Qwen3-8B model
-mlx_lm.convert --hf-path local_model_qwen3 --mlx-path mlx_qwen3_converted --dtype bfloat16
-python qwen3_api_server.py  # Start API server on port 8001
+# Using MLX-LM Server (Apple Silicon optimized)
+mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-bf16 --port 8001
 
 # Alternative: Use Ollama for model serving
 ollama serve                # Start Ollama service
 ollama pull qwen2.5:7b      # Download model (if needed)
+
+# Or use the provided script
+./scripts/run_qwen3_mlx.sh  # Starts MLX server with Qwen3-8B
 ```
 
 ### Frontend (React + TypeScript)
 ```bash
 cd frontend
 npm install              # Install dependencies
-npm run dev              # Start development server (Vite)
+npm run dev              # Start development server (port 5173)
 npm run build            # Build for production
 npm run lint             # Run ESLint
 npm run type-check       # TypeScript type checking
 npm run test             # Run tests with Vitest
 npm run test:coverage    # Run tests with coverage
+npm run format           # Format code with Prettier
 ```
 
 ### Backend (FastAPI + LangChain)
@@ -53,6 +68,7 @@ pytest                              # Run all tests
 pytest app/chains/tests/ -v        # Run specific test directory
 pytest -m integration               # Run integration tests only
 pytest app/chains/tests/test_rag_chain.py::test_multi_query_generation -v  # Run single test
+pytest --cov=app --cov-report=html # Generate coverage report
 ```
 
 ### Docker Services
@@ -62,6 +78,7 @@ docker-compose -f docker-compose.yml up api   # Start specific service
 docker-compose logs -f api                    # View logs
 docker-compose down                           # Stop all services
 docker-compose down -v                        # Stop and remove volumes
+docker ps                                     # Check running containers
 ```
 
 ### Dify Platform Scripts
@@ -76,7 +93,6 @@ python scripts/dify-deploy.py --app apps/*.yaml      # Deploy Dify apps
 python scripts/figma_cli.py --interactive           # Interactive mode
 python scripts/figma_cli.py --file-key YOUR_KEY     # Command line mode
 python scripts/figma_webhook.py                     # Start webhook server
-./scripts/quick_start.sh                            # Quick start (Chinese)
 ```
 
 ### Testing Commands

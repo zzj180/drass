@@ -26,17 +26,17 @@ class VectorStoreService:
     def _initialize_store(self):
         """Initialize the vector store based on configuration"""
         try:
-            vector_store_type = getattr(settings, 'vector_store_type', 'chroma')
-            if vector_store_type == "chroma":
-                from langchain.vectorstores import Chroma
-                from langchain.embeddings import HuggingFaceEmbeddings
+            vector_store_type = getattr(settings, 'VECTOR_STORE_TYPE', 'chromadb').lower()
+            if vector_store_type in ["chroma", "chromadb"]:
+                from langchain_community.vectorstores import Chroma
+                from langchain_community.embeddings import HuggingFaceEmbeddings
                 
                 # Use HuggingFace embeddings as fallback
                 embeddings = HuggingFaceEmbeddings(
                     model_name="sentence-transformers/all-MiniLM-L6-v2"
                 )
                 
-                persist_dir = getattr(settings, 'chroma_persist_directory', './data/chroma')
+                persist_dir = getattr(settings, 'CHROMA_PERSIST_DIRECTORY', './data/chroma')
                 self.vector_store = Chroma(
                     collection_name=self.collection_name,
                     embedding_function=embeddings,
@@ -44,32 +44,32 @@ class VectorStoreService:
                 )
                 logger.info(f"Initialized ChromaDB vector store at {persist_dir}")
             else:
-                logger.warning(f"Unsupported vector store type: {settings.vector_store_type}")
+                logger.warning(f"Unsupported vector store type: {vector_store_type}")
                 
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")
     
-    async def add_documents(self, documents: List[Dict[str, Any]]) -> bool:
+    async def add_documents(self, texts: List[str], metadatas: Optional[List[Dict[str, Any]]] = None) -> List[str]:
         """Add documents to the vector store"""
         try:
             if not self.vector_store:
                 logger.error("Vector store not initialized")
-                return False
+                return []
             
-            # Convert documents to LangChain format
+            # Convert to LangChain Document format
             from langchain.schema import Document
             docs = [
                 Document(
-                    page_content=doc.get("content", ""),
-                    metadata=doc.get("metadata", {})
+                    page_content=text,
+                    metadata=metadata if metadata else {}
                 )
-                for doc in documents
+                for text, metadata in zip(texts, metadatas or [{} for _ in texts])
             ]
             
-            # Add to vector store
-            self.vector_store.add_documents(docs)
-            logger.info(f"Added {len(documents)} documents to vector store")
-            return True
+            # Add to vector store and get IDs
+            ids = self.vector_store.add_documents(docs)
+            logger.info(f"Added {len(texts)} documents to vector store")
+            return ids
             
         except Exception as e:
             logger.error(f"Error adding documents: {e}")
@@ -130,7 +130,7 @@ class VectorStoreService:
             # Get collection stats if available
             stats = {
                 "status": "initialized",
-                "type": settings.vector_store_type,
+                "type": getattr(settings, 'VECTOR_STORE_TYPE', 'chromadb'),
                 "collection": self.collection_name
             }
             
