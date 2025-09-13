@@ -36,16 +36,21 @@ class LocalMLXProvider(BaseLLMProvider):
         try:
             # For MLX server, health endpoint is at root, not under /v1
             health_url = self.base_url.replace('/v1', '') + '/health'
-            async with httpx.AsyncClient() as temp_client:
+            logger.info(f"Testing MLX health endpoint: {health_url}")
+            async with httpx.AsyncClient(timeout=10.0) as temp_client:
                 response = await temp_client.get(health_url)
+                logger.info(f"Health check response: {response.status_code} - {response.text}")
                 if response.status_code == 200:
                     self._initialized = True
                     logger.info(f"Local MLX provider initialized at {self.base_url}")
                 else:
                     raise Exception(f"MLX server not responding: {response.status_code}")
-        except httpx.ConnectError:
-            logger.warning(f"MLX server not available at {self.base_url}")
+        except httpx.ConnectError as e:
+            logger.warning(f"MLX server not available at {self.base_url}: {e}")
             raise Exception(f"Cannot connect to MLX server at {self.base_url}")
+        except Exception as e:
+            logger.warning(f"Failed to connect to MLX server: {e}")
+            raise
     
     async def generate(
         self,
@@ -238,14 +243,16 @@ class LocalMLXProvider(BaseLLMProvider):
     async def health_check(self) -> Dict[str, Any]:
         """Check MLX provider health"""
         try:
-            if not self.client:
-                self.client = httpx.AsyncClient(base_url=self.base_url, timeout=10.0)
+            # Use a separate client for health check at the root URL
+            health_url = self.base_url.replace('/v1', '') + '/health'
+            async with httpx.AsyncClient(timeout=10.0) as health_client:
+                response = await health_client.get(health_url)
             
-            response = await self.client.get("/health")
-            
-            # Also try to get model info
+            # Also try to get model info using the v1 client
             model_info = {}
             try:
+                if not self.client:
+                    self.client = httpx.AsyncClient(base_url=self.base_url, timeout=10.0)
                 models_response = await self.client.get("/models")
                 if models_response.status_code == 200:
                     model_info = models_response.json()

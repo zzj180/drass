@@ -8,11 +8,14 @@ import {
   IconButton,
   Divider,
   useTheme,
+  Tooltip,
+  Badge,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Settings as SettingsIcon,
   Add as AddIcon,
+  AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { MessageList } from './MessageList';
@@ -21,6 +24,7 @@ import { ChatInterfaceProps, Message } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { getApiUrl } from '../../config/config';
 import { authService } from '../../services/authService';
+import { FileUploadDialog } from '../FileUpload/FileUploadDialog';
 
 /**
  * Main ChatInterface component container
@@ -53,6 +57,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [fileUploadDialogOpen, setFileUploadDialogOpen] = useState(false);
+  const [businessContextFiles, setBusinessContextFiles] = useState<any[]>([]);
 
   // Handle message actions
   const handleMessageAction = useCallback(
@@ -130,7 +136,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
       
       // 准备请求数据 - 匹配后端 ChatRequest 模型
-      const requestData = {
+      const requestData: any = {
         messages: [
           ...messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role,
@@ -144,11 +150,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         stream: false,
         use_knowledge_base: true
       };
-      
-      // 如果有业务上下文附件，添加文件内容
+
+      // Add business context files info if available
       if (businessContextFiles.length > 0) {
-        // TODO: 实现文件内容读取和发送
-        console.log('Including business context files:', businessContextFiles.map(af => af.file.name));
+        requestData.context_files = businessContextFiles.map(f => ({
+          id: f.id,
+          name: f.name
+        }));
+        console.log('Including business context files in request:', businessContextFiles);
+        // Clear business context files after sending
+        // They are one-time use for the current message
+        setBusinessContextFiles([]);
       }
       
       // Make API call to backend with authentication
@@ -195,10 +207,47 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [attachedFiles]);
 
-  // Handle file attachment
+  // Handle file upload dialog
+  const handleOpenFileUpload = useCallback(() => {
+    setFileUploadDialogOpen(true);
+  }, []);
+
+  const handleCloseFileUpload = useCallback(() => {
+    setFileUploadDialogOpen(false);
+  }, []);
+
+  const handleFileUploadComplete = useCallback((uploadedFiles: any[]) => {
+    console.log('Files uploaded:', uploadedFiles);
+
+    // Filter business context files for immediate use
+    const contextFiles = uploadedFiles.filter(f => f.purpose === 'business_context' && f.status === 'success');
+    if (contextFiles.length > 0) {
+      // Store these for use in the next message
+      setBusinessContextFiles(contextFiles.map(f => ({
+        id: f.id,
+        name: f.name,
+        // Store any other metadata needed
+      })));
+      console.log('Business context files ready for use:', contextFiles);
+    }
+
+    // Knowledge base files are already processed and stored
+    const kbFiles = uploadedFiles.filter(f => f.purpose === 'knowledge_base' && f.status === 'success');
+    if (kbFiles.length > 0) {
+      console.log('Files added to knowledge base:', kbFiles);
+      // Show a success message or notification
+    }
+  }, []);
+
+  // Handle file attachment (legacy - for inline attachment)
   const handleAttachment = useCallback(() => {
     console.log('File attachment clicked');
-    
+
+    // Open the file upload dialog instead
+    handleOpenFileUpload();
+
+    return; // Skip the old implementation
+
     // Create a file input element
     const input = document.createElement('input');
     input.type = 'file';
@@ -312,6 +361,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <AddIcon />
             </IconButton>
 
+            <Tooltip title="Upload Files">
+              <IconButton
+                color="inherit"
+                aria-label="upload files"
+                onClick={handleOpenFileUpload}
+                sx={{ mr: 1 }}
+              >
+                <Badge badgeContent={businessContextFiles.length} color="secondary">
+                  <AttachFileIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+
             <IconButton
               color="inherit"
               aria-label="settings"
@@ -363,6 +425,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </Box>
         </Paper>
       )}
+
+      {/* File Upload Dialog */}
+      <FileUploadDialog
+        open={fileUploadDialogOpen}
+        onClose={handleCloseFileUpload}
+        onUploadComplete={handleFileUploadComplete}
+      />
     </Box>
   );
 };

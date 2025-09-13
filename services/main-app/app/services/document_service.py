@@ -43,7 +43,7 @@ class DocumentService:
         self.doc_processor_url = getattr(settings, 'DOC_PROCESSOR_URL', 'http://localhost:8004')
         self.storage_path = getattr(settings, 'STORAGE_PATH', './data/uploads')
         self.allowed_types = getattr(settings, 'ALLOWED_FILE_TYPES', [
-            '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.md', '.csv'
+            '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.bmp'
         ])
         self.max_file_size = getattr(settings, 'MAX_FILE_SIZE_MB', 50) * 1024 * 1024
         
@@ -147,7 +147,7 @@ class DocumentService:
     ) -> DocumentResponse:
         """Upload a new document"""
         # Read file content
-        content = await file.read()
+        content = file.read()
         
         # Validate file size
         if len(content) > self.max_file_size:
@@ -155,8 +155,19 @@ class DocumentService:
         
         # Validate file type
         file_ext = Path(filename).suffix.lower()
-        if file_ext not in self.allowed_types:
-            raise ValueError(f"File type {file_ext} not allowed. Allowed types: {self.allowed_types}")
+        # Remove the dot from file_ext for comparison
+        file_ext_no_dot = file_ext[1:] if file_ext.startswith('.') else file_ext
+
+        # Check if the extension (without dot) is in allowed types
+        allowed_types_normalized = []
+        for allowed in self.allowed_types:
+            if allowed.startswith('.'):
+                allowed_types_normalized.append(allowed[1:])
+            else:
+                allowed_types_normalized.append(allowed)
+
+        if file_ext_no_dot not in allowed_types_normalized:
+            raise ValueError(f"File type {file_ext} not allowed. Allowed types: {allowed_types_normalized}")
         
         # Create document record
         doc_id = uuid4()
@@ -240,32 +251,79 @@ class DocumentService:
             # Get file content
             file_content = await storage_service.get_file(doc.storage_path)
             
-            # Call document processor service
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                files = {
-                    'file': (doc.filename, file_content, doc.mime_type)
-                }
-                
-                # Prepare processing parameters
-                data = {}
-                if processing_request:
-                    data = {
-                        'chunk_size': processing_request.chunk_size,
-                        'chunk_overlap': processing_request.chunk_overlap,
-                        'extract_metadata': processing_request.extract_metadata,
-                        'language': processing_request.language
+            # Try to call document processor service if available
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    # Quick health check first
+                    health_response = await client.get(f"{self.doc_processor_url}/health")
+                    if health_response.status_code == 200:
+                        # Document processor is available, use it
+                        files = {
+                            'file': (doc.filename, file_content, doc.mime_type)
+                        }
+
+                        # Prepare processing parameters
+                        data = {}
+                        if processing_request:
+                            data = {
+                                'chunk_size': processing_request.chunk_size,
+                                'chunk_overlap': processing_request.chunk_overlap,
+                                'extract_metadata': processing_request.extract_metadata,
+                                'language': processing_request.language
+                            }
+
+                        response = await client.post(
+                            f"{self.doc_processor_url}/convert",
+                            files=files,
+                            data=data
+                        )
+
+                        if response.status_code != 200:
+                            raise Exception(f"Document processor error: {response.text}")
+
+                        result = response.json()
+                    else:
+                        raise Exception("Document processor not available")
+            except Exception as e:
+                # Fallback: Simple text extraction for text-based files
+                logger.warning(f"Document processor not available, using fallback: {e}")
+                result = {
+                    'markdown': '',
+                    'metadata': {
+                        'page_count': 1,
+                        'language': 'en'
                     }
-                
-                response = await client.post(
-                    f"{self.doc_processor_url}/convert",
-                    files=files,
-                    data=data
-                )
-                
-                if response.status_code != 200:
-                    raise Exception(f"Document processor error: {response.text}")
-                
-                result = response.json()
+                }
+
+                # Simple extraction based on file type
+                if doc.file_type in [DocumentType.TXT, DocumentType.MD]:
+                    result['markdown'] = file_content.decode('utf-8', errors='ignore')
+                elif doc.file_type == DocumentType.PDF:
+                    # Try to extract text from PDF using PyPDF2
+                    try:
+                        import io
+                        from PyPDF2 import PdfReader
+
+                        pdf_file = io.BytesIO(file_content)
+                        pdf_reader = PdfReader(pdf_file)
+
+                        text_content = []
+                        page_count = len(pdf_reader.pages)
+
+                        for page_num in range(page_count):
+                            page = pdf_reader.pages[page_num]
+                            text = page.extract_text()
+                            if text:
+                                text_content.append(f"--- Page {page_num + 1} ---\n{text}")
+
+                        result['markdown'] = "\n\n".join(text_content) if text_content else "PDF document: Unable to extract text"
+                        result['metadata']['page_count'] = page_count
+                        logger.info(f"Extracted text from PDF: {doc.filename}, pages: {page_count}")
+                    except Exception as pdf_error:
+                        logger.error(f"Failed to extract PDF text: {pdf_error}")
+                        result['markdown'] = f"PDF document: {doc.filename} (extraction failed: {str(pdf_error)})"
+                else:
+                    result['markdown'] = f"Document: {doc.filename} (type: {doc.file_type.value})"
                 
                 # Update document with extracted content
                 doc.extracted_text = result.get('markdown', '')

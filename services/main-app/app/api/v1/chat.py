@@ -50,7 +50,7 @@ class ConversationSummary(BaseModel):
     model: Optional[str] = Field(default=None, description="Model used")
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
     current_user: Dict[str, Any] = Depends(get_current_active_user)
@@ -94,7 +94,7 @@ async def chat(
         )
 
 
-@router.post("/chat/stream")
+@router.post("/stream")
 async def chat_stream(
     request: ChatRequest,
     current_user: Dict[str, Any] = Depends(get_current_active_user)
@@ -146,7 +146,7 @@ async def chat_stream(
         )
 
 
-@router.websocket("/chat/ws")
+@router.websocket("/ws")
 async def chat_websocket(
     websocket: WebSocket,
     token: str = None

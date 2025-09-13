@@ -201,18 +201,48 @@ EOF
 # Function to start infrastructure services
 start_infrastructure() {
     print_section "Starting infrastructure services"
-    
+
     # Check if Docker is running
     if ! docker info > /dev/null 2>&1; then
-        print_warning "Docker is not running. Skipping Docker-based services."
-        print_warning "Some features may be limited without PostgreSQL, Redis, and ChromaDB."
-        return 0
+        print_warning "Docker is not running. Attempting to start Docker Desktop..."
+
+        # Try to start Docker on macOS
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            open -a Docker 2>/dev/null || true
+            print_status "Waiting for Docker to start (up to 30 seconds)..."
+
+            # Wait for Docker to be ready
+            local docker_attempts=0
+            while [ $docker_attempts -lt 15 ]; do
+                if docker info > /dev/null 2>&1; then
+                    print_success "Docker started successfully!"
+                    break
+                fi
+                sleep 2
+                docker_attempts=$((docker_attempts + 1))
+                echo -n "."
+            done
+            echo
+
+            # Check again if Docker is running
+            if ! docker info > /dev/null 2>&1; then
+                print_warning "Docker failed to start. Skipping Docker-based services."
+                print_warning "Some features may be limited without PostgreSQL, Redis, and ChromaDB."
+                return 0
+            fi
+        else
+            print_warning "Docker is not running. Please start Docker manually."
+            print_warning "Some features may be limited without PostgreSQL, Redis, and ChromaDB."
+            return 0
+        fi
     fi
     
     # Start PostgreSQL
     print_status "Starting PostgreSQL..."
     docker-compose -f "$DOCKER_COMPOSE_FILE" up -d postgres
-    wait_for_service "http://localhost:5432" "PostgreSQL" || true
+    # PostgreSQL doesn't have an HTTP endpoint, just wait a few seconds for it to start
+    sleep 5
+    print_success "PostgreSQL started"
     
     # Start Redis
     print_status "Starting Redis..."
@@ -239,8 +269,9 @@ start_microservices() {
         # First, upgrade sentence-transformers if needed (silent)
         pip install --upgrade sentence-transformers huggingface-hub >/dev/null 2>&1
         
-        # Start the service
+        # Start the service with environment variables
         print_status "Starting embedding service on port 8002..."
+        export EMBEDDING_API_BASE=http://localhost:8002
         nohup python app.py > "$LOG_DIR/embedding.log" 2>&1 &
         EMBEDDING_PID=$!
         echo $EMBEDDING_PID > "$PID_DIR/embedding.pid"
@@ -251,22 +282,26 @@ start_microservices() {
         print_warning "Embedding service directory not found, skipping..."
     fi
     
-    # Start Reranking Service
-    print_status "Starting Reranking Service..."
-    if [ -d "services/reranking-service" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" up -d reranking-service
-        wait_for_service "http://localhost:8004/health" "Reranking Service"
+    # Start Reranking Service (Docker required)
+    if docker info > /dev/null 2>&1; then
+        print_status "Starting Reranking Service..."
+        if [ -d "services/reranking-service" ]; then
+            docker-compose -f "$DOCKER_COMPOSE_FILE" up -d reranking-service
+            wait_for_service "http://localhost:8004/health" "Reranking Service"
+        else
+            print_warning "Reranking service directory not found, skipping..."
+        fi
+        
+        # Start Document Processor
+        print_status "Starting Document Processor..."
+        if [ -d "services/doc-processor" ]; then
+            docker-compose -f "$DOCKER_COMPOSE_FILE" up -d doc-processor
+            wait_for_service "http://localhost:5003/health" "Document Processor"
+        else
+            print_warning "Document processor directory not found, skipping..."
+        fi
     else
-        print_warning "Reranking service directory not found, skipping..."
-    fi
-    
-    # Start Document Processor
-    print_status "Starting Document Processor..."
-    if [ -d "services/doc-processor" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" up -d doc-processor
-        wait_for_service "http://localhost:5003/health" "Document Processor"
-    else
-        print_warning "Document processor directory not found, skipping..."
+        print_warning "Docker not running, skipping reranking and document processor services"
     fi
     
     print_success "Microservices started"
@@ -301,18 +336,24 @@ start_backend() {
     else
         cd "$PROJECT_ROOT/services/main-app"
         
-        # Install dependencies if needed
+        # Create and setup venv if needed
         if [ ! -d "venv" ]; then
             print_status "Creating Python virtual environment..."
             python3 -m venv venv
         fi
         
-        # Activate venv and install requirements
+        # Activate venv and install dependencies
         source venv/bin/activate
-        pip install -q -r requirements.txt
+        print_status "Installing dependencies in venv..."
+        pip install -q -r requirements.txt 2>&1 | grep -v "Requirement already satisfied" || true
         
-        # Start the main app
+        # Start the main app with environment variables
         print_status "Starting FastAPI backend..."
+        # Ensure environment variables are exported for the backend
+        export LLM_BASE_URL=http://localhost:8001/v1
+        export OPENAI_API_BASE=http://localhost:8001/v1
+        export LLM_MODEL=qwen3-8b-mlx
+        export OPENAI_API_KEY=not-required
         nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > "$LOG_DIR/backend.log" 2>&1 &
         BACKEND_PID=$!
         echo $BACKEND_PID > "$PID_DIR/backend.pid"
@@ -344,7 +385,8 @@ start_frontend() {
         echo $FRONTEND_PID > "$PID_DIR/frontend.pid"
         
         cd "$PROJECT_ROOT"
-        wait_for_service "http://localhost:5173" "Frontend"
+        # Frontend may run on port 3000 or 5173 depending on Vite config
+        wait_for_service "http://localhost:3000" "Frontend" || wait_for_service "http://localhost:5173" "Frontend"
     fi
 }
 
@@ -399,7 +441,7 @@ show_status() {
     
     echo
     echo -e "${CYAN}📋 Service URLs:${NC}"
-    echo -e "  ${GREEN}•${NC} Frontend:          http://localhost:5173"
+    echo -e "  ${GREEN}•${NC} Frontend:          http://localhost:3000"
     echo -e "  ${GREEN}•${NC} Backend API:       http://localhost:8000"
     echo -e "  ${GREEN}•${NC} API Documentation: http://localhost:8000/docs"
     echo -e "  ${GREEN}•${NC} LLM Server:        http://localhost:8001"
@@ -415,7 +457,7 @@ show_status() {
     echo
     echo -e "${CYAN}🎯 Quick Tests:${NC}"
     echo -e "  ${GREEN}•${NC} Health Check: curl http://localhost:8000/health"
-    echo -e "  ${GREEN}•${NC} Upload File:  Use the UI at http://localhost:5173"
+    echo -e "  ${GREEN}•${NC} Upload File:  Use the UI at http://localhost:3000"
     
     echo
     echo -e "${YELLOW}💡 Tips:${NC}"

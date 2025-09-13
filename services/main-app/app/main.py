@@ -169,9 +169,9 @@ async def health_check() -> Dict[str, Any]:
         health_status["status"] = "degraded"
     
     try:
-        # Check LLM service
-        from app.services.llm_service import llm_service
-        health_status["services"]["llm"] = await llm_service.health_check()
+        # Check LLM service (using unified service)
+        from app.services.llm_service_enhanced import unified_llm_service
+        health_status["services"]["llm"] = await unified_llm_service.health_check()
     except Exception as e:
         health_status["services"]["llm"] = {"status": "unhealthy", "error": str(e)}
         health_status["status"] = "degraded"

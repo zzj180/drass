@@ -136,23 +136,25 @@ async def upload_document(
         
         document = await document_service.upload_document(
             user_id=current_user["id"],
-            file=file,
-            content=content,
+            file=file.file,
+            filename=file.filename,
+            content_type=file.content_type,
             folder_id=folder_id,
             tags=tag_list,
+            description=None,
             auto_process=auto_process
         )
-        
+
         return Document(
-            id=document["id"],
-            name=document["name"],
-            type=document["type"],
-            size=document["size"],
-            status=document["status"],
-            metadata=document.get("metadata", {}),
-            created_at=document["created_at"],
-            updated_at=document["updated_at"],
-            tags=document.get("tags", [])
+            id=str(document.id),
+            name=document.filename,
+            type=document.file_type.value,
+            size=document.file_size,
+            status=document.status.value,
+            metadata=document.metadata,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+            tags=document.tags
         )
         
     except HTTPException:
@@ -308,18 +310,19 @@ async def process_document(
     """
     try:
         from app.services.document_service import document_service
-        
+        from uuid import UUID
+
         result = await document_service.process_document(
-            document_id=document_id,
+            document_id=UUID(document_id),
             user_id=current_user["id"]
         )
         
         return ProcessingResult(
-            document_id=result["document_id"],
-            status=result["status"],
-            extracted_text=result.get("extracted_text"),
-            metadata=result.get("metadata", {}),
-            processing_time=result["processing_time"]
+            document_id=str(result.document_id),
+            status=result.status.value if hasattr(result.status, 'value') else result.status,
+            extracted_text=result.extracted_text,
+            metadata=result.metadata or {},
+            processing_time=result.processing_time
         )
         
     except Exception as e:
