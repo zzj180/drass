@@ -1,0 +1,101 @@
+# Application Configuration
+# Central configuration for all services and components
+
+# Environment settings
+environment: "development"  # development, staging, production
+
+# Service Ports Configuration
+ports:
+  frontend: 3000
+  backend: 8000
+  llm: 8001
+  embedding: 8002
+  reranking: 8003
+  document_processor: 8004
+  chroma: 8005
+  postgres: 5432
+  redis: 6379
+
+# API Endpoints
+api:
+  base_url: "http://localhost"
+  frontend_url: "http://localhost:3000"
+  backend_url: "http://localhost:8000"
+  llm_url: "http://localhost:8001"
+  embedding_url: "http://localhost:8002"
+  reranking_url: "http://localhost:8003"
+
+# WebSocket Configuration
+websocket:
+  enabled: true
+  backend_url: "ws://localhost:8000"
+  frontend_url: "ws://localhost:3000"
+
+# File Upload Configuration
+upload:
+  max_file_size: 10485760  # 10MB in bytes
+  allowed_types:
+    - "application/pdf"
+    - "application/msword"
+    - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    - "text/plain"
+    - "text/markdown"
+    - "application/json"
+    - "text/csv"
+    - "application/vnd.ms-excel"
+    - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+# LLM Configuration
+llm:
+  provider: "local"  # local, openrouter, openai, anthropic
+  model_name: "qwen3-8b-mlx"
+  temperature: 0.7
+  max_tokens: 1000
+  timeout: 60
+
+# Database Configuration
+database:
+  postgres:
+    host: "localhost"
+    port: 5432
+    name: "compliance_db"
+    user: "compliance_user"
+    password: "compliance_password"
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+
+# Vector Database Configuration
+vector_db:
+  type: "chroma"  # chroma, pinecone, weaviate
+  host: "localhost"
+  port: 8005
+  collection_name: "compliance_knowledge"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/app.log"
+  max_size: "10MB"
+  backup_count: 5
+
+# Security Configuration
+security:
+  cors:
+    allowed_origins: ["http://localhost:3000", "http://localhost:3001"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["*"]
+  api_keys:
+    openrouter: "${OPENROUTER_API_KEY}"
+    openai: "${OPENAI_API_KEY}"
+    anthropic: "${ANTHROPIC_API_KEY}"
+
+# Feature Flags
+features:
+  file_upload: true
+  websocket: true
+  streaming: true
+  knowledge_base: true
+  document_processing: true
+  experimental_features: false

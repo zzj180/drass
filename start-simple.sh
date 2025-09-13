@@ -18,9 +18,19 @@ NC='\033[0m' # No Color
 
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRONTEND_PORT=3000
-BACKEND_PORT=8080
-LLM_PORT=8001
+
+# Load configuration from YAML file
+CONFIG_FILE="$PROJECT_ROOT/config/app.yaml"
+if [ -f "$CONFIG_FILE" ]; then
+    FRONTEND_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG_FILE'))['ports']['frontend'])" 2>/dev/null || echo "3000")
+    BACKEND_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG_FILE'))['ports']['backend'])" 2>/dev/null || echo "8000")
+    LLM_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG_FILE'))['ports']['llm'])" 2>/dev/null || echo "8001")
+else
+    # Fallback to default values
+    FRONTEND_PORT=3000
+    BACKEND_PORT=8000
+    LLM_PORT=8001
+fi
 
 # Log files
 LOG_DIR="$PROJECT_ROOT/logs"

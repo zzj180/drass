@@ -5,7 +5,6 @@ import {
   Paper,
   Typography,
   Chip,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -161,7 +160,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
             }}
           >
             <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', mr: 1 }}>
-              Attached files:
+              附件文件 (点击用途标签可更改):
             </Typography>
             {attachedFiles.map((attachedFile, index) => (
               <Box key={attachedFile.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -186,7 +185,15 @@ export const InputArea: React.FC<InputAreaProps> = ({
                   size="small"
                   variant="filled"
                   onClick={() => handlePurposeChange(attachedFile.id)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{ 
+                    cursor: 'pointer',
+                    '&:hover': {
+                      opacity: 0.8,
+                      transform: 'scale(1.05)'
+                    },
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  title="点击更改用途"
                 />
               </Box>
             ))}
@@ -214,7 +221,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
             fullWidth
             value={value}
             onChange={handleChange}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleKeyDown as any}
             onFocus={handleFocus}
             onBlur={handleBlur}
             placeholder={placeholder}

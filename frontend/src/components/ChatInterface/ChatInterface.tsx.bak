@@ -19,7 +19,6 @@ import { MessageList } from './MessageList';
 import { InputArea, AttachedFile, AttachmentPurpose } from './InputArea';
 import { ChatInterfaceProps, Message } from './types';
 import { v4 as uuidv4 } from 'uuid';
-import { getApiUrl } from '../../config/config';
 
 /**
  * Main ChatInterface component container
@@ -146,7 +145,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
       
       // Make API call to backend
-      const response = await fetch(`${getApiUrl('backend')}/api/v1/chat`, {
+      const response = await fetch('http://localhost:8000/api/v1/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

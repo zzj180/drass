@@ -7,20 +7,31 @@ from pydantic import BaseModel
 import httpx
 import asyncio
 import json
+import sys
+import os
+
+# Add config directory to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'config'))
+from config_manager import get_config
+
+# Load configuration
+config = get_config()
 
 app = FastAPI(title="LangChain Compliance Assistant API")
 
-# Enable CORS
+# Enable CORS with configuration
+cors_config = config.get_cors_config()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_config.get("allowed_origins", ["*"]),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=cors_config.get("allowed_methods", ["*"]),
+    allow_headers=cors_config.get("allowed_headers", ["*"]),
 )
 
 # LLM Configuration
-LLM_API_BASE = "http://localhost:8001/v1"
+llm_config = config.get_llm_config()
+LLM_API_BASE = f"{config.get_url('llm')}/v1"
 
 class AttachmentInfo(BaseModel):
     filename: str
@@ -75,12 +86,12 @@ async def chat(request: ChatRequest):
             response = await client.post(
                 f"{LLM_API_BASE}/completions",
                 json={
-                    "model": "qwen3-8b-mlx",
+                    "model": llm_config.get("model_name", "qwen3-8b-mlx"),
                     "prompt": prompt,
-                    "max_tokens": 1000,
-                    "temperature": 0.7
+                    "max_tokens": llm_config.get("max_tokens", 1000),
+                    "temperature": llm_config.get("temperature", 0.7)
                 },
-                timeout=60.0
+                timeout=llm_config.get("timeout", 60)
             )
             response.raise_for_status()
             
@@ -119,5 +130,15 @@ async def list_models():
 if __name__ == "__main__":
     import uvicorn
     import sys
-    port = 8080 if "--port" in sys.argv else 8000
+    
+    # Get port from config or command line
+    if "--port" in sys.argv:
+        port = int(sys.argv[sys.argv.index("--port") + 1])
+    else:
+        port = config.get_port("backend")
+    
+    print(f"Starting backend on port {port}")
+    print(f"Configuration: {config.get_environment()}")
+    print(f"LLM URL: {LLM_API_BASE}")
+    
     uvicorn.run(app, host="0.0.0.0", port=port)
