@@ -59,7 +59,7 @@ class ConfigManager {
         rerankingUrl,
       },
       websocket: {
-        enabled: true,
+        enabled: false, // Disabled for now - using HTTP API
         backendUrl: 'ws://localhost:8000',
       },
       upload: {
@@ -78,7 +78,7 @@ class ConfigManager {
       },
       features: {
         fileUpload: true,
-        websocket: true,
+        websocket: false, // Disabled for now
         streaming: true,
         knowledgeBase: true,
       },

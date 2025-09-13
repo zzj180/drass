@@ -24,38 +24,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Initialize WebSocket connection
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
-    const newSocket = io(wsUrl, {
-      transports: ['websocket'],
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-
-    socketRef.current = newSocket;
-
-    newSocket.on('connect', () => {
-      console.log('WebSocket connected');
-      setIsConnected(true);
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-      setIsConnected(false);
-    });
-
-    newSocket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-
-    setSocket(newSocket);
-
-    // Cleanup on unmount
-    return () => {
-      newSocket.close();
-    };
+    // WebSocket is disabled for now - using HTTP API instead
+    console.log('WebSocket connection disabled - using HTTP API');
+    
+    // TODO: Enable WebSocket when backend supports it
+    // const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+    // const newSocket = io(wsUrl, {
+    //   transports: ['websocket'],
+    //   autoConnect: true,
+    //   reconnection: true,
+    //   reconnectionAttempts: 5,
+    //   reconnectionDelay: 1000,
+    // });
+    
+    // For now, just set as disconnected
+    setIsConnected(false);
   }, []);
 
   const sendMessage = useCallback((event: string, data: any) => {
