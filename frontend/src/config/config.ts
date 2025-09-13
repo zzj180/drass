@@ -36,20 +36,21 @@ class ConfigManager {
   }
 
   private loadConfig(): AppConfig {
-    // Try to load from environment variables first
-    const backendPort = import.meta.env.VITE_BACKEND_PORT || '8000';
-    const frontendPort = import.meta.env.VITE_FRONTEND_PORT || '3000';
-    const llmPort = import.meta.env.VITE_LLM_PORT || '8001';
-    const embeddingPort = import.meta.env.VITE_EMBEDDING_PORT || '8002';
-    const rerankingPort = import.meta.env.VITE_RERANKING_PORT || '8003';
+    // Use hardcoded values for now to fix the immediate issue
+    const baseUrl = 'http://localhost';
+    const backendUrl = 'http://localhost:8000';
+    const llmUrl = 'http://localhost:8001';
+    const embeddingUrl = 'http://localhost:8002';
+    const rerankingUrl = 'http://localhost:8003';
+    
+    // Debug logging
+    console.log('Config loaded (hardcoded):', {
+      baseUrl,
+      backendUrl,
+      llmUrl
+    });
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost';
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || `${baseUrl}:${backendPort}`;
-    const llmUrl = import.meta.env.VITE_LLM_URL || `${baseUrl}:${llmPort}`;
-    const embeddingUrl = import.meta.env.VITE_EMBEDDING_URL || `${baseUrl}:${embeddingPort}`;
-    const rerankingUrl = import.meta.env.VITE_RERANKING_URL || `${baseUrl}:${rerankingPort}`;
-
-    return {
+    const config = {
       api: {
         baseUrl,
         backendUrl,
@@ -58,23 +59,34 @@ class ConfigManager {
         rerankingUrl,
       },
       websocket: {
-        enabled: import.meta.env.VITE_WEBSOCKET_ENABLED === 'true' || true,
-        backendUrl: import.meta.env.VITE_WEBSOCKET_BACKEND_URL || `ws://localhost:${backendPort}`,
+        enabled: true,
+        backendUrl: 'ws://localhost:8000',
       },
       upload: {
-        maxFileSize: parseInt(import.meta.env.VITE_MAX_FILE_SIZE || '10485760'), // 10MB
-        allowedTypes: (import.meta.env.VITE_ALLOWED_FILE_TYPES || 
-          'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/json,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ).split(','),
+        maxFileSize: 10485760, // 10MB
+        allowedTypes: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/markdown',
+          'application/json',
+          'text/csv',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ],
       },
       features: {
-        fileUpload: import.meta.env.VITE_FEATURE_FILE_UPLOAD === 'true' || true,
-        websocket: import.meta.env.VITE_FEATURE_WEBSOCKET === 'true' || true,
-        streaming: import.meta.env.VITE_FEATURE_STREAMING === 'true' || true,
-        knowledgeBase: import.meta.env.VITE_FEATURE_KNOWLEDGE_BASE === 'true' || true,
+        fileUpload: true,
+        websocket: true,
+        streaming: true,
+        knowledgeBase: true,
       },
-      environment: import.meta.env.MODE || 'development',
+      environment: 'development',
     };
+    
+    console.log('Final config object:', config);
+    return config;
   }
 
   public get<K extends keyof AppConfig>(key: K): AppConfig[K] {
@@ -82,7 +94,9 @@ class ConfigManager {
   }
 
   public getApiUrl(service: keyof AppConfig['api']): string {
-    return this.config.api[service];
+    const url = this.config.api[service];
+    console.log(`Getting API URL for ${service}:`, url);
+    return url;
   }
 
   public getWebSocketUrl(): string {
@@ -116,6 +130,13 @@ class ConfigManager {
 
 // Global config instance
 export const config = new ConfigManager();
+
+// Debug: Log configuration on load
+console.log('Frontend Config Manager initialized:', {
+  backendUrl: config.getApiUrl('backendUrl'),
+  websocketUrl: config.getWebSocketUrl(),
+  features: config.get('features')
+});
 
 // Convenience functions
 export const getApiUrl = (service: keyof AppConfig['api']) => config.getApiUrl(service);

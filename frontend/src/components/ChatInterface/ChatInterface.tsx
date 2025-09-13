@@ -146,7 +146,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
       
       // Make API call to backend
-      const response = await fetch(`${getApiUrl('backend')}/api/v1/chat`, {
+      const response = await fetch(`${getApiUrl('backendUrl')}/api/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

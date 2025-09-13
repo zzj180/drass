@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Config Test</title>
+</head>
+<body>
+    <h1>Configuration Test</h1>
+    <div id="config-info"></div>
+    
+    <script type="module">
+        // Test environment variables
+        const configInfo = document.getElementById('config-info');
+        configInfo.innerHTML = `
+            <h2>Environment Variables:</h2>
+            <p>VITE_BACKEND_PORT: ${import.meta.env.VITE_BACKEND_PORT || 'undefined'}</p>
+            <p>VITE_BACKEND_URL: ${import.meta.env.VITE_BACKEND_URL || 'undefined'}</p>
+            <p>VITE_API_BASE_URL: ${import.meta.env.VITE_API_BASE_URL || 'undefined'}</p>
+            <p>MODE: ${import.meta.env.MODE || 'undefined'}</p>
+            
+            <h2>Test API Call:</h2>
+            <button onclick="testApi()">Test API Call</button>
+            <div id="api-result"></div>
+        `;
+        
+        window.testApi = async function() {
+            const resultDiv = document.getElementById('api-result');
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: 'Test message from config test',
+                        attachments: []
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<p style="color: green;">✅ API call successful!</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">❌ API call failed: ${response.status}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ API call error: ${error.message}</p>`;
+            }
+        };
+    </script>
+</body>
+</html>
