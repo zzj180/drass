@@ -192,13 +192,22 @@ EOF
         print_success ".env file already exists"
     fi
     
-    # Load environment variables
-    export $(cat "$ENV_FILE" | grep -v '^#' | xargs)
+    # Load environment variables (skip comments and empty lines)
+    set -a
+    source <(grep -v '^#' "$ENV_FILE" | grep -v '^$')
+    set +a
 }
 
 # Function to start infrastructure services
 start_infrastructure() {
     print_section "Starting infrastructure services"
+    
+    # Check if Docker is running
+    if ! docker info > /dev/null 2>&1; then
+        print_warning "Docker is not running. Skipping Docker-based services."
+        print_warning "Some features may be limited without PostgreSQL, Redis, and ChromaDB."
+        return 0
+    fi
     
     # Start PostgreSQL
     print_status "Starting PostgreSQL..."
