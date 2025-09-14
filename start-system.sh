@@ -152,10 +152,18 @@ EMBEDDING_PROVIDER=local
 EMBEDDING_API_BASE=http://localhost:8002
 EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
 
-# Reranking Service
+# Reranking Service (Enhanced)
 RERANKING_ENABLED=true
 RERANKING_API_BASE=http://localhost:8004
-RERANKING_MODEL=BAAI/bge-reranker-base
+RERANKING_MODEL=cross-encoder/ms-marco-MiniLM-L-12-v2
+RERANKING_PROVIDER=sentence-transformers
+RERANKING_DEVICE=cpu
+RERANKING_MAX_LENGTH=512
+RERANKING_BATCH_SIZE=32
+RERANKING_MAX_DOCUMENTS=100
+FALLBACK_ENABLED=true
+CACHE_TYPE=lru
+CACHE_SIZE=1000
 
 # Vector Store
 VECTOR_STORE_TYPE=chromadb
@@ -282,12 +290,43 @@ start_microservices() {
         print_warning "Embedding service directory not found, skipping..."
     fi
     
-    # Start Reranking Service (Docker required)
+    # Start Reranking Service (Docker required) - Enhanced with fallback support
     if docker info > /dev/null 2>&1; then
-        print_status "Starting Reranking Service..."
+        print_status "Starting Reranking Service (with fallback support)..."
         if [ -d "services/reranking-service" ]; then
-            docker-compose -f "$DOCKER_COMPOSE_FILE" up -d reranking-service
-            wait_for_service "http://localhost:8004/health" "Reranking Service"
+            # Check if container is already running
+            if docker-compose -f "$DOCKER_COMPOSE_FILE" ps reranking-service 2>/dev/null | grep -q "Up"; then
+                print_warning "Reranking service already running"
+            else
+                # Start with enhanced configuration
+                docker-compose -f "$DOCKER_COMPOSE_FILE" up -d reranking-service
+            fi
+
+            # Enhanced health check with retry logic
+            local retry_count=0
+            local max_retries=10
+            while [ $retry_count -lt $max_retries ]; do
+                if curl -s "http://localhost:8004/health" > /dev/null 2>&1; then
+                    # Check if using fallback model
+                    local health_status=$(curl -s "http://localhost:8004/health")
+                    if echo "$health_status" | grep -q '"is_fallback_active":true'; then
+                        print_warning "Reranking Service started with fallback model"
+                    else
+                        print_success "Reranking Service is ready!"
+                    fi
+                    break
+                else
+                    print_status "Waiting for Reranking Service... (attempt $((retry_count + 1))/$max_retries)"
+                    sleep 5
+                    retry_count=$((retry_count + 1))
+                fi
+            done
+
+            if [ $retry_count -eq $max_retries ]; then
+                print_warning "Reranking Service failed to start within timeout"
+                print_status "Checking Reranking Service logs..."
+                docker-compose -f "$DOCKER_COMPOSE_FILE" logs --tail=20 reranking-service
+            fi
         else
             print_warning "Reranking service directory not found, skipping..."
         fi
@@ -425,6 +464,23 @@ test_system() {
     else
         print_warning "✗ Embedding Service not available"
     fi
+
+    # Test reranking service
+    print_status "Testing Reranking Service..."
+    if curl -s "http://localhost:8004/health" > /dev/null 2>&1; then
+        local health_response=$(curl -s "http://localhost:8004/health")
+        if echo "$health_response" | grep -q '"status":"healthy"'; then
+            if echo "$health_response" | grep -q '"is_fallback_active":true'; then
+                print_warning "✓ Reranking Service is healthy (using fallback model)"
+            else
+                print_success "✓ Reranking Service is healthy"
+            fi
+        else
+            print_warning "✗ Reranking Service is degraded"
+        fi
+    else
+        print_warning "✗ Embedding Service not available"
+    fi
     
     # Test vector store
     print_status "Testing ChromaDB..."
@@ -446,18 +502,21 @@ show_status() {
     echo -e "  ${GREEN}•${NC} API Documentation: http://localhost:8000/docs"
     echo -e "  ${GREEN}•${NC} LLM Server:        http://localhost:8001"
     echo -e "  ${GREEN}•${NC} Embedding Service: http://localhost:8002"
+    echo -e "  ${GREEN}•${NC} Reranking Service: http://localhost:8004"
     echo -e "  ${GREEN}•${NC} ChromaDB:          http://localhost:8005"
     
     echo
     echo -e "${CYAN}📁 Log Files:${NC}"
-    echo -e "  ${GREEN}•${NC} LLM:      $LOG_DIR/llm.log"
-    echo -e "  ${GREEN}•${NC} Backend:  $LOG_DIR/backend.log"
-    echo -e "  ${GREEN}•${NC} Frontend: $LOG_DIR/frontend.log"
+    echo -e "  ${GREEN}•${NC} LLM:       $LOG_DIR/llm.log"
+    echo -e "  ${GREEN}•${NC} Backend:   $LOG_DIR/backend.log"
+    echo -e "  ${GREEN}•${NC} Frontend:  $LOG_DIR/frontend.log"
+    echo -e "  ${GREEN}•${NC} Reranking: $LOG_DIR/reranking.log"
     
     echo
     echo -e "${CYAN}🎯 Quick Tests:${NC}"
-    echo -e "  ${GREEN}•${NC} Health Check: curl http://localhost:8000/health"
-    echo -e "  ${GREEN}•${NC} Upload File:  Use the UI at http://localhost:3000"
+    echo -e "  ${GREEN}•${NC} Health Check:   curl http://localhost:8000/health"
+    echo -e "  ${GREEN}•${NC} Reranking Test: curl http://localhost:8004/health"
+    echo -e "  ${GREEN}•${NC} Upload File:    Use the UI at http://localhost:3000"
     
     echo
     echo -e "${YELLOW}💡 Tips:${NC}"
