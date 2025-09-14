@@ -8,6 +8,11 @@
 # ===========================================
 FROM python:3.11-slim as base
 
+# 配置Debian镜像源（使用清华大学镜像）
+RUN echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm main" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm-updates main" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main" >> /etc/apt/sources.list
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -26,9 +31,10 @@ FROM base as dependencies
 # Copy requirements file
 COPY requirements.txt .
 
-# Configure pip for faster downloads
-RUN pip config set global.index-url https://pypi.org/simple/ && \
-    pip config set global.trusted-host pypi.org
+# 配置pip使用国内镜像源以加速下载
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ && \
+    pip config set install.trusted-host pypi.tuna.tsinghua.edu.cn && \
+    pip config set global.extra-index-url "https://mirrors.aliyun.com/pypi/simple/ https://pypi.douban.com/simple/"
 
 # Install Python dependencies (this layer will be cached)
 RUN pip install --no-cache-dir --upgrade pip && \
