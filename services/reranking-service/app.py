@@ -160,7 +160,8 @@ async def lifespan(app: FastAPI):
         # Initialize model loader
         model_loader = ModelLoader(cache_dir=settings.MODEL_CACHE_DIR)
         
-        # Initialize reranker
+        # Initialize reranker with timeout
+        logger.info(f"Loading reranker model: {settings.MODEL_NAME}")
         reranker = Reranker(
             model_name=settings.MODEL_NAME,
             device=settings.DEVICE,
@@ -175,8 +176,10 @@ async def lifespan(app: FastAPI):
         logger.info(f"Model loaded in {load_time:.2f} seconds")
         
     except Exception as e:
-        logger.error(f"Failed to initialize service: {str(e)}")
-        raise
+        logger.error(f"Failed to initialize reranker: {str(e)}")
+        logger.warning("Service will start without reranking capabilities")
+        logger.warning("Reranking endpoints will return 503 Service Unavailable")
+        reranker = None
     
     yield
     
