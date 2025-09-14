@@ -26,7 +26,7 @@ def check_model_availability():
     
     # Check if it's a HuggingFace model and files exist in cache
     if "/" in model_name:
-        cache_path = Path(cache_dir) / "models--" + model_name.replace("/", "--")
+        cache_path = Path(cache_dir) / f"models--{model_name.replace('/', '--')}"
         if cache_path.exists():
             logger.info(f"Found cached model at {cache_path}")
             return True

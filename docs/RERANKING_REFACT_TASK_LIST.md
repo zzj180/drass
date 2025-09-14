@@ -1049,10 +1049,11 @@ echo -e "  ${GREEN}•${NC} Reranking Service: http://localhost:8004"
 | 2025-01-12 | 1.0.0 | 初始版本，基于RERANKING_SERVICE_OPTIMIZATION_PLAN.md创建任务列表 | System |
 | 2025-01-14 | 1.1.0 | 更新任务状态，完成90.5%的任务，实现核心重构功能 | System |
 | 2025-01-14 | 2.0.0 | 完成全部任务（100%），创建了构建/部署脚本，更新了start-system.sh | System |
+| 2025-01-14 | 2.0.1 | 修复容器启动错误：1) 修复start_service.py中Path拼接TypeError 2) 替换app.py为重构版本 | System |
 
 ---
 
-**注**: 
+**注**:
 1. 所有任务都设计为可独立验收的颗粒度
 2. 每个任务包含明确的输入、输出和验收标准
 3. 任务之间的依赖关系已明确标注

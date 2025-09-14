@@ -46,7 +46,6 @@ htmlcov/
 
 # Model cache (will be mounted as volume)
 model_cache/
-models/
 
 # Git
 .git/
