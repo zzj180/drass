@@ -1,0 +1,18 @@
+# Ignore user-generated configurations
+*.yaml
+*.yml
+*.json
+!.gitignore
+!example-*.yaml
+
+# Backup files
+*.backup
+*.bak
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.*

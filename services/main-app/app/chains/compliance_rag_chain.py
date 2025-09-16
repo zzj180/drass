@@ -31,6 +31,10 @@ from app.chains.prompts import (
     CONDENSE_QUESTION_PROMPT,
     MULTI_QUERY_PROMPT
 )
+from app.chains.compliance_prompts import (
+    DEFAULT_COMPLIANCE_CONFIG,
+    EXPANSION_PROMPT
+)
 
 logger = logging.getLogger(__name__)
 
@@ -418,14 +422,14 @@ class ComplianceRAGChain:
         return formatted
     
     def _format_response(self, response: Any) -> Dict[str, Any]:
-        """Format the chain response"""
+        """Format the chain response with word count validation"""
         if isinstance(response, dict):
             answer = response.get("answer", "")
             context = response.get("context", [])
         else:
             answer = str(response)
             context = []
-        
+
         # Extract sources from context documents
         sources = []
         for doc in context:
@@ -434,7 +438,11 @@ class ComplianceRAGChain:
                     "content": doc.page_content[:500],  # Truncate for response
                     "metadata": doc.metadata
                 })
-        
+
+        # Check word count for compliance responses
+        if self._is_compliance_mode():
+            answer = self._ensure_minimum_word_count_sync(answer, sources)
+
         return {
             "answer": answer,
             "sources": sources,
@@ -452,6 +460,123 @@ class ComplianceRAGChain:
         """Clear conversation memory"""
         if self.memory:
             self.memory.clear()
+
+    def _is_compliance_mode(self) -> bool:
+        """Check if compliance mode is enabled"""
+        # Check configuration for compliance mode
+        return getattr(settings, 'COMPLIANCE_MODE_ENABLED', True)
+
+    def _count_chinese_words(self, text: str) -> int:
+        """Count Chinese words/characters in text"""
+        # For Chinese text, count characters (excluding punctuation and spaces)
+        import re
+        # Remove spaces, punctuation, and count remaining characters
+        chinese_text = re.sub(r'[^\u4e00-\u9fff\u3400-\u4dbf]+', '', text)
+        english_words = len(re.findall(r'[a-zA-Z]+', text))
+        return len(chinese_text) + english_words
+
+    async def _ensure_minimum_word_count(
+        self,
+        answer: str,
+        sources: List[Dict[str, Any]],
+        min_words: int = None
+    ) -> str:
+        """
+        Ensure the answer meets minimum word count requirement
+
+        Args:
+            answer: Current answer text
+            sources: Source documents for context
+            min_words: Minimum word count (default from config)
+
+        Returns:
+            Expanded answer if needed
+        """
+        if min_words is None:
+            min_words = DEFAULT_COMPLIANCE_CONFIG.min_word_count
+
+        current_count = self._count_chinese_words(answer)
+
+        # If already meets requirement, return as is
+        if current_count >= min_words:
+            logger.info(f"Answer already has {current_count} words, meeting requirement of {min_words}")
+            return answer
+
+        logger.info(f"Answer has {current_count} words, expanding to meet {min_words} requirement")
+
+        # Prepare expansion prompt
+        expansion_attempts = 0
+        max_attempts = 3
+        expanded_answer = answer
+
+        while current_count < min_words and expansion_attempts < max_attempts:
+            expansion_attempts += 1
+
+            # Create expansion prompt with context
+            expansion_context = f"""
+当前回答字数：{current_count}
+要求字数：{min_words}
+还需补充：{min_words - current_count}字
+
+请基于以下已有回答进行深度扩展，确保：
+1. 保持原有内容不变，在此基础上补充更多细节
+2. 添加更多实例、案例分析、具体步骤说明
+3. 深化每个要点的分析，提供更详细的实施指导
+4. 补充相关的法规依据、最佳实践、风险提示
+5. 确保扩展内容与原回答保持连贯性和一致性
+
+已有回答：
+{expanded_answer}
+
+请继续扩展以上内容，使总字数达到{min_words}字以上。
+"""
+
+            try:
+                # Use LLM to expand the answer
+                expansion_response = await self.llm.ainvoke(
+                    expansion_context,
+                    config={"max_tokens": 4000}
+                )
+
+                # Extract the expanded content
+                if hasattr(expansion_response, 'content'):
+                    expanded_content = expansion_response.content
+                else:
+                    expanded_content = str(expansion_response)
+
+                # Combine original and expanded content
+                expanded_answer = f"{expanded_answer}\n\n{expanded_content}"
+                current_count = self._count_chinese_words(expanded_answer)
+
+                logger.info(f"Expansion attempt {expansion_attempts}: now has {current_count} words")
+
+            except Exception as e:
+                logger.error(f"Error during expansion attempt {expansion_attempts}: {e}")
+                break
+
+        # Add word count indicator
+        if current_count >= min_words:
+            expanded_answer = f"{expanded_answer}\n\n---\n📊 **字数统计**: {current_count}字 (满足{min_words}字要求)"
+        else:
+            expanded_answer = f"{expanded_answer}\n\n---\n⚠️ **字数统计**: {current_count}字 (目标{min_words}字)"
+
+        return expanded_answer
+
+    def _ensure_minimum_word_count_sync(
+        self,
+        answer: str,
+        sources: List[Dict[str, Any]],
+        min_words: int = None
+    ) -> str:
+        """Synchronous version of word count expansion"""
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(
+                self._ensure_minimum_word_count(answer, sources, min_words)
+            )
+        finally:
+            loop.close()
 
 
 class ComplianceRAGChainFactory:

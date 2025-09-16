@@ -159,6 +159,13 @@ class Settings(BaseSettings):
     ENABLE_MEMORY: bool = Field(default=True, env="ENABLE_MEMORY")
     ENABLE_TOOLS: bool = Field(default=True, env="ENABLE_TOOLS")
     ENABLE_AGENT: bool = Field(default=True, env="ENABLE_AGENT")
+
+    # Compliance Settings
+    COMPLIANCE_MODE_ENABLED: bool = Field(default=True, env="COMPLIANCE_MODE_ENABLED")
+    COMPLIANCE_MIN_WORD_COUNT: int = Field(default=5000, env="COMPLIANCE_MIN_WORD_COUNT")
+    COMPLIANCE_ENABLE_EMOJI: bool = Field(default=True, env="COMPLIANCE_ENABLE_EMOJI")
+    COMPLIANCE_ENABLE_MARKDOWN: bool = Field(default=True, env="COMPLIANCE_ENABLE_MARKDOWN")
+    COMPLIANCE_MAX_EXPANSION_ATTEMPTS: int = Field(default=3, env="COMPLIANCE_MAX_EXPANSION_ATTEMPTS")
     
     # Lowercase properties for compatibility
     @property

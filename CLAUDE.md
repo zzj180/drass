@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Drass is a hybrid Dify + LangChain compliance assistant platform that combines:
 - **Dify Platform**: Core deployment infrastructure using Docker Compose
-- **LangChain Implementation**: Custom compliance assistant with RAG and Agent capabilities  
+- **LangChain Implementation**: Custom compliance assistant with RAG and Agent capabilities
 - **Microservices Architecture**: Separate services for document processing, embeddings, and reranking
 - **Figma Integration**: UI development assistant that integrates Figma designs with GitHub issues
 
@@ -31,6 +31,7 @@ cd frontend && npm run dev          # Start frontend (port 5173)
 ```bash
 ./quick_test.sh                     # Run smoke tests for all services
 ./run_all_tests.sh                  # Run complete test suite
+./test_improvements.sh              # Test specific improvements
 ```
 
 ### Local LLM Model Setup (Qwen3-8B with MLX)
@@ -63,12 +64,13 @@ npm run format           # Format code with Prettier
 ```bash
 cd services/main-app
 pip install -r requirements.txt    # Install dependencies
-uvicorn app.main:app --reload      # Run development server
+uvicorn app.main:app --reload --port 8000  # Run development server
 pytest                              # Run all tests
 pytest app/chains/tests/ -v        # Run specific test directory
 pytest -m integration               # Run integration tests only
 pytest app/chains/tests/test_rag_chain.py::test_multi_query_generation -v  # Run single test
 pytest --cov=app --cov-report=html # Generate coverage report
+pytest -k "not slow"               # Skip slow tests
 ```
 
 ### Docker Services
@@ -79,6 +81,7 @@ docker-compose logs -f api                    # View logs
 docker-compose down                           # Stop all services
 docker-compose down -v                        # Stop and remove volumes
 docker ps                                     # Check running containers
+docker logs <container_id> --tail 100         # View recent container logs
 ```
 
 ### Dify Platform Scripts
@@ -111,6 +114,17 @@ npm run test                                # Run tests in watch mode
 npm run test:ui                             # Run tests with UI
 npm run test:coverage                       # Generate coverage report
 npm test -- --run                           # Run tests once (CI mode)
+```
+
+### System Prompt Integration
+```bash
+# Test prompt integration
+python test_prompt_integration.py   # Test system prompt with word count expansion
+
+# Test services
+cd services/main-app
+python test_word_count_expansion.py # Test word count expansion feature
+python test_simple_expansion.py     # Test simple expansion logic
 ```
 
 ## High-Level Architecture
@@ -170,9 +184,10 @@ npm test -- --run                           # Run tests once (CI mode)
 
 **Environment Variables** (set in `.env` or system):
 - **LLM Configuration**: `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `OPENROUTER_API_KEY`
-  - For local Qwen3-8B: `OPENAI_API_BASE=http://localhost:8001/v1`, `LLM_MODEL=qwen3-8b-mlx`
+  - For local Qwen3-8B: `LLM_BASE_URL=http://localhost:8001/v1`, `LLM_MODEL=qwen3-8b-mlx`
+  - Alternative: `OPENAI_API_BASE` for OpenAI-compatible endpoints
 - **Vector Store**: `VECTOR_STORE_TYPE`, `VECTOR_STORE_HOST`, `CHROMA_PERSIST_DIRECTORY`
-- **Embeddings**: `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`
+- **Embeddings**: `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_BASE`
 - **Reranking**: `RERANKING_ENABLED`, `RERANKING_PROVIDER`, `RERANKING_API_KEY`
 - **Database**: `DATABASE_URL`, `REDIS_URL`, `DB_PASSWORD`
 - **Security**: `SECRET_KEY`, `ENCRYPTION_KEY`, `JWT_ALGORITHM`
@@ -190,10 +205,12 @@ npm test -- --run                           # Run tests once (CI mode)
 2. **API Entry Point**: `services/main-app/app/main.py` - FastAPI application setup and lifecycle
 3. **RAG Implementation**: `services/main-app/app/chains/compliance_rag_chain.py` - Core RAG logic
 4. **Agent System**: `services/main-app/app/agents/compliance_agent.py` - Agent orchestration
-5. **Frontend State**: `frontend/src/store/index.ts` - Redux store configuration
-6. **Docker Services**: `docker-compose.yml` - Complete service definitions
-7. **Local LLM Server**: `qwen3_api_server.py` - Flask API server for Qwen3-8B-MLX model
-8. **LLM Documentation**: `docs/LLM_API_CONFIG_GUIDE.md` - Detailed LLM setup instructions
+5. **Prompt Templates**: `services/main-app/app/chains/prompts.py` - Core prompts
+6. **Compliance Prompts**: `services/main-app/app/chains/compliance_prompts.py` - Specialized compliance prompts
+7. **Frontend State**: `frontend/src/store/index.ts` - Redux store configuration
+8. **Docker Services**: `docker-compose.yml` - Complete service definitions
+9. **Local LLM Server**: `qwen3_api_server.py` - Flask API server for Qwen3-8B-MLX model
+10. **LLM Documentation**: `docs/LLM_API_CONFIG_GUIDE.md` - Detailed LLM setup instructions
 
 ### Integration Points
 
@@ -220,7 +237,8 @@ npm test -- --run                           # Run tests once (CI mode)
 - ✅ **LangChain RAG**: Streaming-capable RAG chain with multi-query support
 - ✅ **Agent System**: Comprehensive tool set with specialized agents
 - ✅ **Local LLM**: Qwen3-8B-MLX model converted and API server implemented
-- 📋 **Deployment**: Docker Compose ready, AWS infrastructure documented in `AWS_DEPLOYMENT_RESOURCES.md`
+- ✅ **System Prompt**: Word count expansion feature integrated
+- 📋 **Deployment**: Docker Compose ready, deployment scripts available
 
 ### Common Development Workflows
 
@@ -232,8 +250,9 @@ npm test -- --run                           # Run tests once (CI mode)
 
 **Modifying the RAG Pipeline**
 1. Core logic: `services/main-app/app/chains/compliance_rag_chain.py`
-2. Prompts: `services/main-app/app/chains/prompts.py`
+2. Prompts: `services/main-app/app/chains/prompts.py` and `compliance_prompts.py`
 3. Retrieval config: `services/main-app/app/core/config.py` (embedding/reranking settings)
+4. Test changes: Run `pytest app/chains/tests/` to verify
 
 ### Project-Specific Conventions
 
@@ -244,3 +263,5 @@ npm test -- --run                           # Run tests once (CI mode)
 - **Component Structure**: Feature-based organization with lazy loading
 - **Test Files**: Colocated with source code in `tests/` subdirectories
 - **Environment Files**: `.env` for local development, never commit secrets
+- **Git Workflow**: Feature branches, main branch for stable code
+- **Code Style**: Black for Python, Prettier for TypeScript/JavaScript

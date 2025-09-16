@@ -1,0 +1,158 @@
+# AWS Cloud Deployment Template
+version: "1.0"
+
+metadata:
+  name: "aws-template"
+  description: "Template for AWS cloud deployment using ECS/EC2"
+  author: "Drass Team"
+
+deployment:
+  type: "aws"
+  environment: "production"
+  auto_scaling_enabled: true
+  min_replicas: 2
+  max_replicas: 10
+  target_cpu_percent: 70
+  health_check_enabled: true
+  health_check_interval: 30
+  health_check_timeout: 10
+  health_check_retries: 3
+
+infrastructure:
+  aws:
+    region: "${AWS_REGION:-us-west-2}"
+    vpc_id: "${AWS_VPC_ID}"
+    subnet_ids:
+      - "${AWS_SUBNET_ID_1}"
+      - "${AWS_SUBNET_ID_2}"
+    security_group_ids:
+      - "${AWS_SECURITY_GROUP_ID}"
+    instance_types:
+      main_app: "t3.xlarge"
+      llm_server: "g4dn.xlarge"  # GPU instance for LLM
+      embedding_service: "t3.large"
+      reranking_service: "t3.large"
+      doc_processor: "t3.medium"
+    ecs_cluster: "${AWS_ECS_CLUSTER:-drass-cluster}"
+    ecr_registry: "${AWS_ECR_REGISTRY}"
+    s3_bucket: "${AWS_S3_BUCKET:-drass-storage}"
+
+services:
+  llm:
+    provider: "openrouter"  # Use cloud API for production
+    model: "anthropic/claude-3.5-sonnet"
+    api_key: "${OPENROUTER_API_KEY}"
+    base_url: "https://openrouter.ai/api/v1"
+    temperature: 0.7
+    max_tokens: 4096
+    timeout: 60
+    context_length: 32768
+    # OpenRouter specific
+    openrouter_site_url: "https://drass.example.com"
+    openrouter_app_name: "Drass Compliance Assistant"
+
+  embedding:
+    provider: "openai"  # Use OpenAI for production reliability
+    model: "text-embedding-3-small"
+    api_key: "${OPENAI_API_KEY}"
+    batch_size: 100
+    dimensions: 1536
+
+  reranking:
+    enabled: true
+    provider: "cohere"  # Use Cohere for production quality
+    model: "rerank-english-v2.0"
+    api_key: "${COHERE_API_KEY}"
+    top_k: 10
+
+  document_processor:
+    enabled: true
+    api_base: "http://doc-processor.${AWS_ECS_CLUSTER}.local:8003"
+    max_file_size: "500MB"
+    supported_formats: ["pdf", "docx", "xlsx", "pptx", "txt", "md", "html", "csv"]
+    ocr_enabled: true
+    ocr_language: "eng"
+
+  vector_store:
+    type: "pinecone"  # Managed vector database for production
+    api_key: "${PINECONE_API_KEY}"
+    pinecone_environment: "${PINECONE_ENVIRONMENT:-us-west1-gcp}"
+    pinecone_index_name: "${PINECONE_INDEX:-drass-docs}"
+    collection_name: "drass_docs"
+
+  database:
+    type: "postgresql"
+    host: "${RDS_ENDPOINT}"
+    port: 5432
+    database: "compliance_assistant"
+    user: "${RDS_USERNAME}"
+    password: "${RDS_PASSWORD}"
+    pool_size: 50
+    max_overflow: 10
+    pool_timeout: 30
+
+  cache:
+    type: "redis"
+    host: "${ELASTICACHE_ENDPOINT}"
+    port: 6379
+    password: "${ELASTICACHE_PASSWORD:-}"
+    ttl: 3600
+    db: 0
+    redis_ssl: true
+    redis_cluster_mode: true
+
+application:
+  main_app:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 8
+    enable_docs: false  # Disable in production
+    cors_origins: ["https://drass.example.com"]
+    enable_streaming: true
+    enable_agent: true
+    enable_memory: true
+    rate_limit_enabled: true
+    rate_limit_per_minute: 100
+    jwt_enabled: true
+    jwt_algorithm: "RS256"  # Use RS256 for production
+    access_token_expire_minutes: 15
+    refresh_token_expire_days: 30
+
+  frontend:
+    port: 443  # HTTPS in production
+    build_mode: "production"
+    api_base: "https://api.drass.example.com"
+    websocket_url: "wss://api.drass.example.com/ws"
+    source_map: false
+    minify: true
+    bundle_analyze: false
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    scrape_interval: "15s"
+    retention: "30d"
+
+  grafana:
+    enabled: true
+    port: 3000
+    admin_user: "${GRAFANA_ADMIN_USER:-admin}"
+    admin_password: "${GRAFANA_ADMIN_PASSWORD}"
+
+  log_aggregator: "cloudwatch"
+  metrics_exporter: "prometheus"
+
+logging:
+  level: "INFO"
+  format: "json"
+  outputs:
+    - type: "cloudwatch"
+      log_group: "/aws/ecs/drass"
+      log_stream: "main-app"
+    - type: "file"
+      path: "/var/log/drass/app.log"
+  file_rotation: true
+  file_max_bytes: 52428800  # 50MB
+  file_backup_count: 10

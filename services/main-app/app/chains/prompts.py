@@ -3,9 +3,17 @@ Prompt templates for the compliance RAG chain
 """
 
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from app.chains.compliance_prompts import (
+    DATA_COMPLIANCE_EXPERT_PROMPT,
+    COMPLIANCE_QA_PROMPT_WITH_FILE,
+    CompliancePromptConfig,
+    DEFAULT_COMPLIANCE_CONFIG,
+    get_compliance_prompt,
+    format_file_context
+)
 
-# System prompt for compliance assistant
-COMPLIANCE_SYSTEM_PROMPT = """You are an intelligent compliance assistant specialized in helping users understand and navigate regulatory requirements, compliance standards, and best practices. Your role is to provide accurate, helpful, and actionable compliance guidance based on the provided context.
+# System prompt for compliance assistant - English version
+COMPLIANCE_SYSTEM_PROMPT_EN = """You are an intelligent compliance assistant specialized in helping users understand and navigate regulatory requirements, compliance standards, and best practices. Your role is to provide accurate, helpful, and actionable compliance guidance based on the provided context.
 
 Key responsibilities:
 1. Provide accurate compliance information based on the context
@@ -24,6 +32,9 @@ Guidelines:
 - Maintain a professional and helpful tone
 
 Remember: Compliance accuracy is critical. Only provide information you can verify from the context."""
+
+# Use Chinese prompt as default
+COMPLIANCE_SYSTEM_PROMPT = DATA_COMPLIANCE_EXPERT_PROMPT
 
 # QA prompt template
 COMPLIANCE_QA_PROMPT = """Answer the following question based on the provided context. If the answer is not in the context, please state that you don't have enough information to answer accurately.
