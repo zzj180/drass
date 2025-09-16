@@ -28,7 +28,7 @@ const LoadingFallback = () => (
 
 // Protected route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isAuthenticated = localStorage.getItem('authToken');
+  const isAuthenticated = localStorage.getItem('access_token');
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>登录流程测试</h1>
+
+    <div class="test-section">
+        <h2>1. 测试后端登录 API</h2>
+        <button onclick="testBackendLogin()">测试登录</button>
+        <div id="backend-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 测试前端登录流程</h2>
+        <form onsubmit="testFrontendLogin(event)">
+            <input type="email" id="email" value="test@example.com" placeholder="邮箱">
+            <input type="password" id="password" value="testpassword123" placeholder="密码">
+            <button type="submit">登录</button>
+        </form>
+        <div id="frontend-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 检查本地存储</h2>
+        <button onclick="checkLocalStorage()">检查 LocalStorage</button>
+        <div id="storage-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 访问受保护页面</h2>
+        <button onclick="goToChat()">跳转到聊天页面</button>
+        <button onclick="goToAccessLogs()">跳转到访问日志</button>
+    </div>
+
+    <script>
+        async function testBackendLogin() {
+            const resultDiv = document.getElementById('backend-result');
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', 'test@example.com');
+                formData.append('password', 'testpassword123');
+
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✓ 后端登录成功！</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+
+                    // 存储 token
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('refresh_token', data.refresh_token);
+                } else {
+                    resultDiv.innerHTML = `<p class="error">✗ 登录失败: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">✗ 错误: ${error.message}</p>`;
+            }
+        }
+
+        async function testFrontendLogin(event) {
+            event.preventDefault();
+            const resultDiv = document.getElementById('frontend-result');
+
+            try {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+
+                const formData = new FormData();
+                formData.append('username', email);
+                formData.append('password', password);
+
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const tokens = await response.json();
+
+                    // 保存 tokens
+                    localStorage.setItem('access_token', tokens.access_token);
+                    localStorage.setItem('refresh_token', tokens.refresh_token);
+                    localStorage.setItem('token_expires_at',
+                        (new Date().getTime() + (tokens.expires_in * 1000)).toString());
+
+                    // 获取用户信息
+                    const userResponse = await fetch('http://localhost:8000/api/v1/auth/me', {
+                        headers: {
+                            'Authorization': `Bearer ${tokens.access_token}`
+                        }
+                    });
+
+                    if (userResponse.ok) {
+                        const user = await userResponse.json();
+                        localStorage.setItem('user', JSON.stringify(user));
+
+                        resultDiv.innerHTML = `
+                            <p class="success">✓ 登录成功！</p>
+                            <p>用户: ${user.name} (${user.email})</p>
+                            <p>Token 已保存到 LocalStorage</p>
+                        `;
+                    }
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `<p class="error">✗ 登录失败: ${error.detail}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">✗ 错误: ${error.message}</p>`;
+            }
+        }
+
+        function checkLocalStorage() {
+            const resultDiv = document.getElementById('storage-result');
+            const accessToken = localStorage.getItem('access_token');
+            const refreshToken = localStorage.getItem('refresh_token');
+            const user = localStorage.getItem('user');
+            const language = localStorage.getItem('language');
+
+            let html = '<h3>LocalStorage 内容:</h3>';
+            html += '<ul>';
+            html += `<li>access_token: ${accessToken ? '✓ 存在 (长度: ' + accessToken.length + ')' : '✗ 不存在'}</li>`;
+            html += `<li>refresh_token: ${refreshToken ? '✓ 存在' : '✗ 不存在'}</li>`;
+            html += `<li>user: ${user ? '✓ 存在' : '✗ 不存在'}</li>`;
+            html += `<li>language: ${language || '未设置'}</li>`;
+            html += '</ul>';
+
+            if (user) {
+                html += `<p>用户信息:</p><pre>${JSON.stringify(JSON.parse(user), null, 2)}</pre>`;
+            }
+
+            resultDiv.innerHTML = html;
+        }
+
+        function goToChat() {
+            window.location.href = 'http://localhost:5173/';
+        }
+
+        function goToAccessLogs() {
+            window.location.href = 'http://localhost:5173/knowledge-base/access-logs';
+        }
+    </script>
+</body>
+</html>

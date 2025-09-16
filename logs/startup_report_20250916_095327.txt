@@ -1,0 +1,17 @@
+Startup Report - Tue Sep 16 09:53:51 CST 2025
+=========================
+Duration: 24 seconds
+
+Service PIDs:
+  backend: 91171
+  doc-processor: 91168
+  embedding: 91067
+  frontend: 91176
+  llm: 91064
+
+Port Status:
+  8001: IN USE
+  8000: IN USE
+  8002: IN USE
+  8004: FREE
+  5173: IN USE
