@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from 'react-query';
+import './i18n/config'; // Initialize i18n
 
 import { store } from './store';
 import { theme } from './theme';

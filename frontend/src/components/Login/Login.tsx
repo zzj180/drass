@@ -11,10 +11,12 @@ import {
   Link,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../../services/authService';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +43,7 @@ export const Login: React.FC = () => {
       // Redirect to main chat interface
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(err instanceof Error ? err.message : t('auth.loginFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -64,7 +66,7 @@ export const Login: React.FC = () => {
       >
         <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
           <Typography component="h1" variant="h5" align="center">
-            {isRegisterMode ? 'Create Account' : 'Sign In'}
+            {isRegisterMode ? t('auth.createAccount') : t('auth.signIn')}
           </Typography>
 
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
@@ -74,7 +76,7 @@ export const Login: React.FC = () => {
                 required
                 fullWidth
                 id="name"
-                label="Full Name"
+                label={t('auth.fullName')}
                 name="name"
                 autoComplete="name"
                 autoFocus={isRegisterMode}
@@ -89,7 +91,7 @@ export const Login: React.FC = () => {
               required
               fullWidth
               id="email"
-              label="Email Address"
+              label={t('auth.email')}
               name="email"
               autoComplete="email"
               autoFocus={!isRegisterMode}
@@ -103,7 +105,7 @@ export const Login: React.FC = () => {
               required
               fullWidth
               name="password"
-              label="Password"
+              label={t('auth.password')}
               type="password"
               id="password"
               autoComplete="current-password"
@@ -128,7 +130,7 @@ export const Login: React.FC = () => {
               {isLoading ? (
                 <CircularProgress size={24} />
               ) : (
-                isRegisterMode ? 'Register' : 'Sign In'
+                isRegisterMode ? t('common.register') : t('auth.signIn')
               )}
             </Button>
 
@@ -143,8 +145,8 @@ export const Login: React.FC = () => {
                 disabled={isLoading}
               >
                 {isRegisterMode
-                  ? 'Already have an account? Sign In'
-                  : "Don't have an account? Register"}
+                  ? t('auth.alreadyHaveAccount')
+                  : t('auth.dontHaveAccount')}
               </Link>
             </Box>
 

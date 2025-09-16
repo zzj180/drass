@@ -18,6 +18,7 @@ import {
   AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { MessageList } from './MessageList';
 import { InputArea, AttachedFile, AttachmentPurpose } from './InputArea';
 import { ChatInterfaceProps, Message } from './types';
@@ -38,18 +39,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   enableUpload = true,
   enableStreaming = true,
   maxFileSize = 10485760, // 10MB default
-  placeholder = 'Type your message...',
+  placeholder,
   className,
 }) => {
   const theme = useTheme();
   const dispatch = useDispatch();
-  
+  const { t } = useTranslation();
+
   // Local state for demo (will be connected to Redux)
   const [messages, setMessages] = useState<Message[]>([
     {
       id: uuidv4(),
       role: 'system',
-      content: 'Welcome to the Compliance Assistant! How can I help you today?',
+      content: t('chat.welcome'),
       timestamp: new Date(),
       status: 'sent',
     },
@@ -102,7 +104,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {
         id: uuidv4(),
         role: 'system',
-        content: 'New conversation started. How can I help you?',
+        content: t('chat.welcome'),
         timestamp: new Date(),
         status: 'sent',
       },
@@ -349,7 +351,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               component="div"
               sx={{ flexGrow: 1, color: 'text.primary' }}
             >
-              Compliance Assistant
+              {t('chat.title')}
             </Typography>
 
             <IconButton
@@ -361,7 +363,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <AddIcon />
             </IconButton>
 
-            <Tooltip title="Upload Files">
+            <Tooltip title={t('chat.uploadFiles')}>
               <IconButton
                 color="inherit"
                 aria-label="upload files"
@@ -397,7 +399,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           onRemoveFile={handleRemoveFile}
           onFilePurposeChange={handleFilePurposeChange}
           attachedFiles={attachedFiles}
-          placeholder={placeholder}
+          placeholder={placeholder || t('chat.placeholder')}
           maxLength={maxFileSize}
           isLoading={isLoading}
           enableAttachment={enableUpload}

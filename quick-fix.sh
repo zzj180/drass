@@ -142,13 +142,34 @@ else
     print_warning "Reranking Service skipped (Docker not available)"
 fi
 
-# 3.4 Start Document Processor (if Docker available)
+# 3.4 Start Document Processor (with fallback)
+print_status "Starting Document Processor (port 5003)..."
 if docker info > /dev/null 2>&1; then
-    print_status "Starting Document Processor (port 5003)..."
-    docker-compose up -d doc-processor 2>/dev/null &
-    print_success "Document Processor starting via Docker"
+    # Try Docker version first
+    docker-compose up -d doc-processor 2>/dev/null
+    sleep 3
+    # Check if Docker version is running
+    if docker ps | grep -q doc-processor; then
+        print_success "Document Processor starting via Docker"
+    else
+        print_warning "Docker doc-processor failed, starting local fallback..."
+        # Start local processor as fallback
+        cd "$PROJECT_ROOT/services/doc-processor"
+        nohup python3 local_processor.py > "$LOG_DIR/doc-processor-local_$TIMESTAMP.log" 2>&1 &
+        DOC_PROCESSOR_PID=$!
+        echo $DOC_PROCESSOR_PID > "$PID_DIR/doc-processor.pid"
+        cd "$PROJECT_ROOT"
+        print_success "Document Processor starting locally (PID: $DOC_PROCESSOR_PID)"
+    fi
 else
-    print_warning "Document Processor skipped (Docker not available)"
+    # No Docker, use local version directly
+    print_warning "Docker not available, starting local Document Processor..."
+    cd "$PROJECT_ROOT/services/doc-processor"
+    nohup python3 local_processor.py > "$LOG_DIR/doc-processor-local_$TIMESTAMP.log" 2>&1 &
+    DOC_PROCESSOR_PID=$!
+    echo $DOC_PROCESSOR_PID > "$PID_DIR/doc-processor.pid"
+    cd "$PROJECT_ROOT"
+    print_success "Document Processor starting locally (PID: $DOC_PROCESSOR_PID)"
 fi
 
 # 3.5 Start Main Backend

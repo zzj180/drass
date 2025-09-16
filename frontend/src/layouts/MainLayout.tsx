@@ -24,6 +24,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const drawerWidth = 240;
 
@@ -40,23 +41,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { t } = useTranslation();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
   const menuItems = [
-    { text: 'Chat', icon: <ChatIcon />, path: '/chat' },
-    { text: 'Knowledge Base', icon: <StorageIcon />, path: '/knowledge' },
-    { text: 'Documents', icon: <DocumentIcon />, path: '/documents' },
-    { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+    { text: t('chat.title'), icon: <ChatIcon />, path: '/chat' },
+    { text: t('knowledgeBase.title'), icon: <StorageIcon />, path: '/knowledge-base' },
+    { text: t('accessLogs.title'), icon: <DocumentIcon />, path: '/knowledge-base/access-logs' },
+    { text: t('settings.title'), icon: <SettingsIcon />, path: '/settings' },
   ];
 
   const drawer = (
     <Box>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          Compliance Assistant
+          {t('chat.title')}
         </Typography>
         {isMobile && (
           <IconButton onClick={handleDrawerToggle} sx={{ ml: 'auto' }}>
@@ -107,7 +109,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" noWrap component="div">
-              LangChain Compliance Assistant
+              {t('chat.title')}
             </Typography>
           </Toolbar>
         </AppBar>
