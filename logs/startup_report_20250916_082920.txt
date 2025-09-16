@@ -1,0 +1,16 @@
+Startup Report - Tue Sep 16 08:29:46 CST 2025
+=========================
+Duration: 26 seconds
+
+Service PIDs:
+  backend: 72843
+  embedding: 72748
+  frontend: 72846
+  llm: 72745
+
+Port Status:
+  8001: IN USE
+  8000: FREE
+  8002: IN USE
+  8004: IN USE
+  5173: FREE

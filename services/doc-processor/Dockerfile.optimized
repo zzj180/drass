@@ -1,0 +1,51 @@
+# Optimized Document Processor Dockerfile
+# Using default PyPI without Chinese mirrors for better reliability
+
+FROM python:3.11-slim
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV FLASK_APP=app.py
+
+# Install system dependencies using default Debian repos
+RUN apt-get update && apt-get install -y \
+    # Basic tools
+    curl \
+    wget \
+    # PDF processing tools
+    poppler-utils \
+    # Image processing
+    libmagic1 \
+    # OCR support (English only for minimal size)
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get autoremove -y
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies using default PyPI
+# Add timeout and retry settings for better reliability
+RUN pip install --no-cache-dir \
+    --timeout=60 \
+    --retries=5 \
+    -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/processed /app/temp
+
+# Expose port
+EXPOSE 5003
+
+# Start command
+CMD ["python", "app.py"]

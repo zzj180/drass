@@ -177,7 +177,7 @@ services:
       - MAX_FILE_SIZE=50
       - OCR_ENABLED=true
       - OCR_LANGUAGE=chi_sim+eng
-      - PANDOC_ENABLED=true
+      - PANDOC_ENABLED=false
     volumes:
       - ./data/documents:/app/documents
       - ./data/processed:/app/processed

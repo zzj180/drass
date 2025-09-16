@@ -13,7 +13,6 @@ from typing import Optional, Dict, Any, List
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pypandoc
 import PyPDF2
 from docx import Document
 from openpyxl import load_workbook
@@ -283,8 +282,12 @@ class DocumentConverter:
     def _convert_with_pandoc(self, file_path: str) -> str:
         """使用pandoc进行通用转换"""
         try:
+            import pypandoc
             output = pypandoc.convert_file(file_path, 'md')
             return output
+        except ImportError:
+            logger.error("pypandoc not available, pandoc functionality disabled")
+            raise ValueError("Pandoc functionality is disabled")
         except Exception as e:
             logger.error(f"Pandoc conversion failed: {e}")
             raise ValueError(f"Cannot convert file: {e}")

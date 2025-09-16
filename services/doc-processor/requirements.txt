@@ -23,7 +23,9 @@ pyyaml==6.0.1
 requests==2.31.0
 python-dotenv==1.0.0
 
-# 注释掉重型依赖，按需安装
-# pypandoc==1.11  # 需要pandoc系统依赖
-# scikit-learn==1.3.0  # 重型ML库
-# numpy==1.24.3  # 重型数值计算库
+# Essential dependencies for semantic splitting
+numpy==1.24.3  # Required for semantic splitter
+scikit-learn==1.3.0  # Required for semantic processing
+
+# Optional heavy dependencies
+# pypandoc==1.11  # Requires pandoc system dependency

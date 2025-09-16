@@ -1,0 +1,27 @@
+# Lightweight version - Basic document processing only
+# No semantic splitting features
+
+# Web framework
+Flask==2.3.3
+flask-cors==4.0.0
+
+# Document processing
+python-docx==0.8.11
+PyPDF2==3.0.1
+openpyxl==3.1.2
+python-pptx==0.6.21
+markdown==3.4.4
+beautifulsoup4==4.12.2
+
+# OCR (minimal)
+pytesseract==0.3.10
+Pillow==10.0.0
+
+# File processing
+python-magic==0.4.27
+chardet==5.2.0
+
+# Utilities
+pyyaml==6.0.1
+requests==2.31.0
+python-dotenv==1.0.0
