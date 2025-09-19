@@ -36,18 +36,20 @@ class ConfigManager {
   }
 
   private loadConfig(): AppConfig {
-    // Use hardcoded values for now to fix the immediate issue
-    const baseUrl = 'http://localhost';
-    const backendUrl = 'http://localhost:8000';
-    const llmUrl = 'http://localhost:8001';
-    const embeddingUrl = 'http://localhost:8002';
-    const rerankingUrl = 'http://localhost:8003';
-    
+    // Check environment variables first, then use defaults
+    const baseUrl = import.meta.env.VITE_BASE_URL || 'http://localhost';
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8888';  // Changed to 8888
+    const llmUrl = import.meta.env.VITE_LLM_URL || 'http://localhost:8001';
+    const embeddingUrl = import.meta.env.VITE_EMBEDDING_URL || 'http://localhost:8010';  // Updated to 8010
+    const rerankingUrl = import.meta.env.VITE_RERANKING_URL || 'http://localhost:8012';  // Updated to 8012
+
     // Debug logging
-    console.log('Config loaded (hardcoded):', {
+    console.log('Config loaded:', {
       baseUrl,
       backendUrl,
-      llmUrl
+      llmUrl,
+      embeddingUrl,
+      rerankingUrl
     });
 
     const config = {
@@ -60,8 +62,7 @@ class ConfigManager {
       },
       websocket: {
         enabled: false, // Disabled for now - using HTTP API
-        backendUrl: 'ws://localhost:8000',
-      },
+        backendUrl: backendUrl.replace('http://', 'ws://').replace('https://', 'wss://'),  // Dynamic websocket URL
       upload: {
         maxFileSize: 10485760, // 10MB
         allowedTypes: [
