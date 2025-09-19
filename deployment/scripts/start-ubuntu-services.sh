@@ -764,8 +764,27 @@ EOF
     fi
 fi
 
+# Setup virtual environment if needed
+echo -e "\n${BLUE}Checking Python virtual environment...${NC}"
+VENV_DIR="$BASE_DIR/venv"
+
+if [ ! -d "$VENV_DIR" ]; then
+    echo -e "${YELLOW}Virtual environment not found, setting up...${NC}"
+    if [ -f "$BASE_DIR/deployment/scripts/setup-venv.sh" ]; then
+        bash "$BASE_DIR/deployment/scripts/setup-venv.sh"
+    else
+        echo -e "${RED}Cannot setup virtual environment - setup script missing${NC}"
+    fi
+fi
+
 # Start Drass backend API
 echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
+
+# Check if running as root and warn
+if [ "$EUID" -eq 0 ]; then
+    echo -e "${YELLOW}WARNING: Running as root - API should run as qwkj user${NC}"
+    echo -e "${YELLOW}Consider using: su - qwkj -c 'bash $0'${NC}"
+fi
 
 # Flag to track if we've attempted to start the API
 API_START_ATTEMPTED=false
@@ -994,14 +1013,22 @@ EOF
             # Try with production startup script if available
             API_START_ATTEMPTED=true
 
-            # Use the cleanest startup method available
-            if [ -f "$BASE_DIR/services/main-app/run_api.sh" ]; then
-                echo -e "${BLUE}Using run_api.sh startup script${NC}"
-                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 bash run_api.sh" "$LOG_DIR/drass-api.log" 8888
+            # Use virtual environment if available
+            if [ -f "$BASE_DIR/services/main-app/start_with_venv.sh" ]; then
+                echo -e "${BLUE}Using virtual environment startup${NC}"
+                # Run as qwkj user to use correct permissions
+                if [ "$EUID" -eq 0 ]; then
+                    start_service "Drass API" "su - qwkj -c 'cd $BASE_DIR/services/main-app && LLM_PROVIDER=openai LLM_BASE_URL=http://localhost:8001/v1 LLM_API_KEY=123456 LLM_MODEL=vllm OPENAI_API_BASE=http://localhost:8001/v1 MLX_ENABLED=false EMBEDDING_API_BASE=http://localhost:8010/v1 EMBEDDING_API_KEY=123456 RERANKING_API_BASE=http://localhost:8012/v1 bash start_with_venv.sh'" "$LOG_DIR/drass-api.log" 8888
+                else
+                    start_service "Drass API" "cd $BASE_DIR/services/main-app && source $VENV_DIR/bin/activate && LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' MLX_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+                fi
+            elif [ -d "$VENV_DIR" ]; then
+                echo -e "${BLUE}Using virtual environment directly${NC}"
+                # Use venv Python
+                start_service "Drass API" "cd $BASE_DIR/services/main-app && source $VENV_DIR/bin/activate && source .env 2>/dev/null; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' MLX_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
             else
-                echo -e "${BLUE}Using direct Python startup${NC}"
-                # Use explicit Python path to avoid venv issues
-                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset PYTHONPATH PYTHONHOME; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+                echo -e "${YELLOW}No virtual environment found, using system Python${NC}"
+                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset PYTHONPATH PYTHONHOME; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' MLX_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
             fi
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
