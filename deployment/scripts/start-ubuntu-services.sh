@@ -212,17 +212,36 @@ EOF
 
 # Function to create simple API server
 create_simple_api_server() {
+    # First, make sure port 8000 is free
+    echo -e "${BLUE}Checking if port 8000 is free...${NC}"
+    if lsof -i :8000 >/dev/null 2>&1; then
+        echo -e "${YELLOW}Port 8000 is in use, attempting to free it...${NC}"
+        lsof -ti :8000 | xargs kill -9 2>/dev/null || true
+        sleep 2
+    fi
+
     cat > "$BASE_DIR/simple_api.py" << 'EOF'
 #!/usr/bin/env python3
 import json
+import sys
+import os
+import socket
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import datetime
+
+# Clear proxy settings that might interfere
+for key in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']:
+    if key in os.environ:
+        del os.environ[key]
+
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1,0.0.0.0'
 
 class SimpleAPIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/' or self.path == '/health':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             response = {
                 'status': 'ok',
@@ -241,6 +260,7 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
             response = {
@@ -252,22 +272,69 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
     def log_message(self, format, *args):
-        # Suppress logs
-        pass
+        # Log to stdout for debugging
+        sys.stdout.write("%s - - [%s] %s\n" %
+                         (self.client_address[0],
+                          self.log_date_time_string(),
+                          format%args))
+        sys.stdout.flush()
 
 if __name__ == '__main__':
-    server = HTTPServer(('0.0.0.0', 8000), SimpleAPIHandler)
-    print('Starting simple API server on port 8000...')
+    PORT = 8000
+
+    # Test if port is available
+    test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
+        test_socket.bind(('0.0.0.0', PORT))
+        test_socket.close()
+        print(f'Port {PORT} is available')
+    except OSError as e:
+        print(f'Error: Port {PORT} is not available: {e}')
+        sys.exit(1)
+
+    # Create and start server
+    try:
+        server = HTTPServer(('0.0.0.0', PORT), SimpleAPIHandler)
+        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        print(f'Starting simple API server on port {PORT}...')
+        print(f'Server is ready at http://localhost:{PORT}/')
         server.serve_forever()
+    except OSError as e:
+        print(f'Failed to start server: {e}')
+        sys.exit(1)
     except KeyboardInterrupt:
         print('\nShutting down server...')
         server.shutdown()
 EOF
 
+    chmod +x "$BASE_DIR/simple_api.py"
     echo -e "${GREEN}✓${NC} Created simple API server"
-    start_service "Simple API" "cd $BASE_DIR && python3 simple_api.py" "$LOG_DIR/drass-api.log"
+
+    # Start with explicit proxy clearing
+    start_service "Simple API" "cd $BASE_DIR && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 simple_api.py" "$LOG_DIR/drass-api.log"
+
+    # Wait a bit more to ensure it starts
+    sleep 3
+
+    # Check if it actually started
+    if lsof -i :8000 >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} Simple API server is running on port 8000"
+    else
+        echo -e "${RED}✗${NC} Simple API server failed to start"
+        echo -e "${YELLOW}Checking what happened...${NC}"
+        if [ -f "$LOG_DIR/drass-api.log" ]; then
+            tail -5 "$LOG_DIR/drass-api.log"
+        fi
+    fi
 }
 
 # Check existing vLLM services
@@ -592,6 +659,10 @@ if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
             echo -e "${YELLOW}Last 20 lines of API log:${NC}"
             tail -20 "$LOG_DIR/drass-api.log"
         fi
+
+        # Check if port is actually in use by something else
+        echo -e "${BLUE}Checking what's on port 8000...${NC}"
+        lsof -i :8000 2>/dev/null || echo "  Port 8000 appears to be free"
 
         # Try alternative startup
         echo -e "${BLUE}Trying alternative API startup...${NC}"
