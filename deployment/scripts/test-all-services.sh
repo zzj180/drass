@@ -17,6 +17,49 @@ echo -e "${BLUE}========================================${NC}"
 # Configuration
 BASE_DIR="/home/qwkj/drass"
 
+# Function to check PostgreSQL service status
+check_postgresql_service() {
+    local pg_running=false
+
+    # First check if PostgreSQL is installed
+    if ! command -v psql >/dev/null 2>&1; then
+        echo -e "${YELLOW}!${NC} PostgreSQL is not installed. Installing..."
+        sudo apt-get update >/dev/null 2>&1
+        sudo apt-get install -y postgresql postgresql-contrib >/dev/null 2>&1 && {
+            echo -e "${GREEN}✓${NC} PostgreSQL installed successfully"
+            sleep 3
+        } || {
+            echo -e "${RED}✗${NC} Failed to install PostgreSQL"
+            return 1
+        }
+    fi
+
+    # Check if PostgreSQL service is active
+    for service in postgresql postgresql@14-main postgresql@15-main postgresql-14 postgresql-15 postgresql@16-main; do
+        if systemctl is-active --quiet "$service" 2>/dev/null; then
+            echo -e "${GREEN}✓${NC} PostgreSQL service '$service' is running"
+            pg_running=true
+            break
+        fi
+    done
+
+    if [ "$pg_running" = false ]; then
+        echo -e "${YELLOW}!${NC} PostgreSQL service is not running. Trying to start..."
+        for service in postgresql postgresql@14-main postgresql@15-main postgresql-14 postgresql-15 postgresql@16-main; do
+            if systemctl list-unit-files | grep -q "^${service}.service" 2>/dev/null; then
+                sudo systemctl start "$service" 2>/dev/null && {
+                    echo -e "${GREEN}✓${NC} Started PostgreSQL service '$service'"
+                    pg_running=true
+                    sleep 2
+                    break
+                }
+            fi
+        done
+    fi
+
+    return $([ "$pg_running" = true ] && echo 0 || echo 1)
+}
+
 # Function to test service
 test_service() {
     local name=$1
@@ -135,10 +178,60 @@ echo -e "\n${BLUE}=== 4. Other Services ===${NC}"
 
 # PostgreSQL
 echo -e "\n${BLUE}Testing PostgreSQL...${NC}"
-if PGPASSWORD=drass_password psql -U drass_user -h localhost -d drass_production -c "SELECT 1;" >/dev/null 2>&1; then
-    echo -e "${GREEN}✓${NC} PostgreSQL is accessible"
+
+# First check if service is running
+check_postgresql_service
+
+# Method 1: Try with pg_isready first
+if command -v pg_isready >/dev/null 2>&1; then
+    if pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} PostgreSQL is responding on port 5432"
+    else
+        echo -e "${YELLOW}!${NC} PostgreSQL might not be responding on port 5432"
+    fi
+fi
+
+# Method 2: Try as postgres user (more reliable on Ubuntu)
+if (cd /tmp && sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1); then
+    echo -e "${GREEN}✓${NC} PostgreSQL is accessible as postgres user"
+
+    # Check if drass database exists
+    if (cd /tmp && sudo -u postgres psql -lqt) | cut -d \| -f 1 | grep -qw drass_production; then
+        echo -e "${GREEN}✓${NC} Database 'drass_production' exists"
+
+        # Check if user exists
+        if (cd /tmp && sudo -u postgres psql -c "SELECT 1 FROM pg_user WHERE usename='drass_user';") | grep -q 1; then
+            echo -e "${GREEN}✓${NC} User 'drass_user' exists"
+        else
+            echo -e "${YELLOW}!${NC} User 'drass_user' does not exist, creating..."
+            (cd /tmp && sudo -u postgres psql -c "CREATE USER drass_user WITH PASSWORD 'drass_password';" 2>/dev/null) || true
+        fi
+    else
+        echo -e "${YELLOW}!${NC} Database 'drass_production' does not exist, creating..."
+        # Create database and user
+        (cd /tmp && sudo -u postgres psql <<EOF 2>/dev/null) || true
+-- Create user if not exists
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'drass_user') THEN
+        CREATE USER drass_user WITH PASSWORD 'drass_password';
+    END IF;
+END
+\$\$;
+
+-- Create database
+CREATE DATABASE drass_production OWNER drass_user;
+GRANT ALL PRIVILEGES ON DATABASE drass_production TO drass_user;
+EOF
+        echo -e "${GREEN}✓${NC} Created database and user"
+    fi
 else
-    echo -e "${RED}✗${NC} PostgreSQL connection failed"
+    # Method 3: Try with password authentication (may not work depending on pg_hba.conf)
+    if PGPASSWORD=drass_password psql -U drass_user -h localhost -d drass_production -c "SELECT 1;" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} PostgreSQL is accessible with drass_user"
+    else
+        echo -e "${YELLOW}!${NC} Cannot connect as drass_user (may need pg_hba.conf configuration)"
+    fi
 fi
 
 # Redis
