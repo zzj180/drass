@@ -37,18 +37,18 @@ class LLMService:
                 response = await client.post(
                     f"{self.api_base}/chat/completions",
                     json={
-                        "model": settings.LLM_MODEL,
+                        "model": settings.LLM_MODEL or "vllm",  # Use vllm as default
                         "messages": [
                             {"role": "user", "content": prompt}
                         ],
-                        "max_tokens": max_tokens or settings.LLM_MAX_TOKENS,
-                        "temperature": temperature or settings.LLM_TEMPERATURE
+                        "max_tokens": max_tokens or settings.LLM_MAX_TOKENS or 2048,
+                        "temperature": temperature or settings.LLM_TEMPERATURE or 0.7
                     },
                     headers={
-                        "Authorization": f"Bearer {self.api_key}",
+                        "Authorization": f"Bearer {self.api_key or '123456'}",  # Use 123456 as default
                         "Content-Type": "application/json"
                     },
-                    timeout=30.0
+                    timeout=120.0  # Increase timeout to 120 seconds for large models
                 )
                 
                 if response.status_code == 200:

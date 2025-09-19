@@ -41,7 +41,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}"
             },
-            "timeout": 120.0  # Longer timeout for local models
+            "timeout": httpx.Timeout(300.0, connect=30.0)  # 5 minutes timeout for large models, 30s connect
         }
 
         # For local connections, explicitly disable proxy
