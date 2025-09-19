@@ -577,6 +577,61 @@ fi
 # Start Drass backend API
 echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
 if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
+    # Setup environment configuration
+    echo -e "${BLUE}Setting up environment configuration...${NC}"
+
+    # Create .env file with correct vLLM endpoints
+    cat > "$BASE_DIR/services/main-app/.env" << 'EOF'
+# Auto-generated environment configuration for vLLM services
+APP_NAME="Drass Compliance Assistant"
+ENVIRONMENT="production"
+DEBUG=false
+LOG_LEVEL="INFO"
+
+# Server
+HOST="0.0.0.0"
+PORT=8888
+
+# Database
+DATABASE_URL="postgresql://drass_user:drass_password@localhost:5432/drass_production"
+
+# Redis
+REDIS_URL="redis://localhost:6379/0"
+
+# LLM Configuration - Using local vLLM service
+LLM_PROVIDER="openai"
+LLM_MODEL="vllm"
+LLM_API_KEY="123456"
+LLM_BASE_URL="http://localhost:8001/v1"
+OPENAI_API_BASE="http://localhost:8001/v1"
+OPENAI_API_KEY="123456"
+
+# Embedding Configuration
+EMBEDDING_PROVIDER="openai"
+EMBEDDING_MODEL="Qwen3-Embedding-8B"
+EMBEDDING_API_KEY="123456"
+EMBEDDING_API_BASE="http://localhost:8010/v1"
+
+# Vector Store
+VECTOR_STORE_TYPE="chroma"
+CHROMA_HOST="localhost"
+CHROMA_PORT=8005
+CHROMA_PERSIST_DIRECTORY="/home/qwkj/drass/data/chromadb"
+
+# Disable proxy for local services
+NO_PROXY="localhost,127.0.0.1,::1,0.0.0.0"
+
+# Disable telemetry
+ANONYMIZED_TELEMETRY=false
+DO_NOT_TRACK=true
+
+# Security
+SECRET_KEY="drass-secret-key-change-in-production"
+JWT_ALGORITHM="HS256"
+EOF
+
+    echo -e "${GREEN}✓${NC} Environment configuration created"
+
     # First, ensure FastAPI and uvicorn are installed
     echo -e "${BLUE}Checking backend dependencies...${NC}"
     if ! python3 -c "import fastapi, uvicorn" 2>/dev/null; then
@@ -636,8 +691,15 @@ if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
             # Export NO_PROXY for localhost connections
             export NO_PROXY="localhost,127.0.0.1,::1"
 
+            # Export LLM configuration to ensure it uses vLLM
+            export LLM_BASE_URL="http://localhost:8001/v1"
+            export LLM_API_KEY="123456"
+            export LLM_MODEL="vllm"
+            export OPENAI_API_BASE="http://localhost:8001/v1"
+            export OPENAI_API_KEY="123456"
+
             # Try with different worker counts and without proxy
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' OPENAI_API_BASE='http://localhost:8001/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server
