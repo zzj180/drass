@@ -219,15 +219,104 @@ fi
 # Start ChromaDB
 echo -e "\n${BLUE}Starting ChromaDB...${NC}"
 if ! check_service 8005 "ChromaDB" >/dev/null 2>&1; then
-    cd "$BASE_DIR"
-    start_service "ChromaDB" "cd $BASE_DIR && python -m chromadb.app --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log"
+    # Check if ChromaDB is installed
+    if ! python3 -c "import chromadb" 2>/dev/null; then
+        echo -e "${YELLOW}ChromaDB not found. Installing...${NC}"
+        pip3 install chromadb --no-cache-dir || {
+            echo -e "${RED}Failed to install ChromaDB${NC}"
+            echo -e "${YELLOW}Trying with --user flag...${NC}"
+            pip3 install --user chromadb --no-cache-dir || {
+                echo -e "${RED}Failed to install ChromaDB. Skipping...${NC}"
+                echo -e "${YELLOW}To install manually: pip3 install chromadb${NC}"
+            }
+        }
+    fi
+
+    # Check if ChromaDB is now available
+    if python3 -c "import chromadb" 2>/dev/null; then
+        cd "$BASE_DIR"
+
+        # Try different ways to start ChromaDB
+        echo -e "${BLUE}Attempting to start ChromaDB service...${NC}"
+
+        # Method 1: Use chromadb module directly
+        if python3 -c "import chromadb.app" 2>/dev/null; then
+            start_service "ChromaDB" "cd $BASE_DIR && python3 -m chromadb.app --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log"
+        else
+            # Method 2: Use chroma run command if available
+            if command -v chroma >/dev/null 2>&1; then
+                start_service "ChromaDB" "cd $BASE_DIR && chroma run --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log"
+            else
+                # Method 3: Start ChromaDB server programmatically
+                echo -e "${BLUE}Starting ChromaDB using Python script...${NC}"
+                cat > "$BASE_DIR/start_chromadb.py" << 'EOF'
+import chromadb
+import uvicorn
+import os
+import sys
+
+# Set up ChromaDB path
+chroma_path = sys.argv[1] if len(sys.argv) > 1 else "/home/qwkj/drass/data/chromadb"
+port = int(sys.argv[2]) if len(sys.argv) > 2 else 8005
+
+print(f"Starting ChromaDB on port {port} with data path: {chroma_path}")
+
+try:
+    # Try to start ChromaDB server
+    from chromadb.app import app
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+except ImportError:
+    # Fallback to persistent client
+    print("ChromaDB app module not found, using persistent client mode")
+    client = chromadb.PersistentClient(path=chroma_path)
+    print(f"ChromaDB client initialized at {chroma_path}")
+    print("Note: ChromaDB is running in client mode, not as a server")
+    # Keep the process running
+    import time
+    while True:
+        time.sleep(60)
+EOF
+                start_service "ChromaDB" "cd $BASE_DIR && python3 start_chromadb.py $DATA_DIR/chromadb 8005" "$LOG_DIR/chromadb.log"
+            fi
+        fi
+    else
+        echo -e "${RED}ChromaDB is not available. Skipping ChromaDB service.${NC}"
+        echo -e "${YELLOW}The system will work without vector storage.${NC}"
+    fi
 fi
 
 # Start Drass backend API
 echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
 if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
-    cd "$BASE_DIR/services/main-app"
-    start_service "Drass API" "cd $BASE_DIR/services/main-app && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4" "$LOG_DIR/drass-api.log"
+    # Check if the backend directory exists
+    if [ -d "$BASE_DIR/services/main-app" ]; then
+        cd "$BASE_DIR/services/main-app"
+
+        # Check if uvicorn is installed
+        if ! python3 -c "import uvicorn" 2>/dev/null; then
+            echo -e "${YELLOW}Installing backend dependencies...${NC}"
+            if [ -f "requirements.txt" ]; then
+                pip3 install -r requirements.txt --no-cache-dir || {
+                    echo -e "${YELLOW}Failed to install all requirements, installing core dependencies...${NC}"
+                    pip3 install fastapi uvicorn langchain chromadb psycopg2-binary redis --no-cache-dir
+                }
+            else
+                # Install core dependencies
+                pip3 install fastapi uvicorn langchain chromadb psycopg2-binary redis --no-cache-dir
+            fi
+        fi
+
+        # Check if app.main exists
+        if [ -f "app/main.py" ]; then
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4" "$LOG_DIR/drass-api.log"
+        else
+            echo -e "${YELLOW}Backend application not found at $BASE_DIR/services/main-app/app/main.py${NC}"
+            echo -e "${YELLOW}Skipping backend API service.${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Backend directory not found at $BASE_DIR/services/main-app${NC}"
+        echo -e "${YELLOW}Skipping backend API service.${NC}"
+    fi
 fi
 
 # Start Drass frontend

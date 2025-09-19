@@ -150,14 +150,41 @@ fi
 
 # Install Python packages
 echo -e "\n${BLUE}Installing Python packages...${NC}"
-pip3 install --upgrade pip
-pip3 install \
+
+# Upgrade pip first
+python3 -m pip install --upgrade pip
+
+# Install core dependencies
+echo -e "${BLUE}Installing core Python dependencies...${NC}"
+python3 -m pip install \
     chromadb \
     psutil \
     pyyaml \
-    python-dotenv
+    python-dotenv \
+    uvicorn \
+    fastapi \
+    langchain \
+    psycopg2-binary \
+    redis \
+    numpy || {
+    echo -e "${YELLOW}Some packages failed to install. Trying individually...${NC}"
 
-echo -e "${GREEN}✓${NC} Python packages installed"
+    # Try installing packages one by one if batch install fails
+    for package in chromadb psutil pyyaml python-dotenv uvicorn fastapi langchain psycopg2-binary redis numpy; do
+        echo -e "Installing $package..."
+        python3 -m pip install $package || echo -e "${YELLOW}Warning: Failed to install $package${NC}"
+    done
+}
+
+# Verify ChromaDB installation
+if python3 -c "import chromadb" 2>/dev/null; then
+    echo -e "${GREEN}✓${NC} ChromaDB installed successfully"
+else
+    echo -e "${YELLOW}!${NC} ChromaDB installation needs attention"
+    echo -e "   Try: python3 -m pip install chromadb"
+fi
+
+echo -e "${GREEN}✓${NC} Python packages installation completed"
 
 # Create necessary directories
 echo -e "\n${BLUE}Creating necessary directories...${NC}"
