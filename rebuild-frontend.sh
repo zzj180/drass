@@ -165,23 +165,79 @@ if [ -f ".use-dev-mode" ] || [ ! -d "dist" ]; then
 else
     echo "Starting production server..."
 
-    # Try different methods to serve the built files
-    if command -v serve >/dev/null 2>&1; then
-        # Use serve if available
-        nohup serve -s dist -l 5173 -n > "$LOG_DIR/frontend-prod.log" 2>&1 &
-        FRONTEND_PID=$!
-        echo "Using 'serve' (PID: $FRONTEND_PID)..."
-    elif command -v python3 >/dev/null 2>&1; then
-        # Use Python as fallback
+    # First try Python (most reliable)
+    if command -v python3 >/dev/null 2>&1; then
+        echo "Using Python http.server..."
         cd dist
         nohup python3 -m http.server 5173 --bind 0.0.0.0 > "$LOG_DIR/frontend-prod.log" 2>&1 &
         FRONTEND_PID=$!
         cd ..
-        echo "Using Python http.server (PID: $FRONTEND_PID)..."
+        echo "Started Python http.server (PID: $FRONTEND_PID)..."
+    # Then try npx serve (ensures we use npm's serve)
+    elif npm list -g serve >/dev/null 2>&1 || npm list serve >/dev/null 2>&1; then
+        echo "Using npx serve..."
+        nohup npx serve dist -l 5173 -n > "$LOG_DIR/frontend-prod.log" 2>&1 &
+        FRONTEND_PID=$!
+        echo "Started npx serve (PID: $FRONTEND_PID)..."
+    # Try Node.js static server
+    elif command -v node >/dev/null 2>&1; then
+        echo "Creating Node.js static server..."
+        cat > serve-dist.js << 'EOF'
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const PORT = 5173;
+const DIST_DIR = path.join(__dirname, 'dist');
+
+const mimeTypes = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'application/font-woff',
+  '.woff2': 'application/font-woff2',
+  '.ttf': 'application/font-ttf',
+  '.eot': 'application/vnd.ms-fontobject'
+};
+
+const server = http.createServer((req, res) => {
+  let filePath = path.join(DIST_DIR, req.url === '/' ? 'index.html' : req.url);
+
+  // Handle SPA routing - serve index.html for all routes
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    filePath = path.join(DIST_DIR, 'index.html');
+  }
+
+  fs.readFile(filePath, (err, content) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+
+    const ext = path.extname(filePath);
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(content);
+  });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Frontend server running at http://localhost:${PORT}/`);
+});
+EOF
+        nohup node serve-dist.js > "$LOG_DIR/frontend-prod.log" 2>&1 &
+        FRONTEND_PID=$!
+        echo "Started Node.js static server (PID: $FRONTEND_PID)..."
     else
         echo -e "${RED}ERROR: No suitable static server found${NC}"
-        echo "Please install 'serve' globally:"
-        echo "  npm install -g serve"
+        echo "Python3 or Node.js is required to serve the frontend"
         exit 1
     fi
 
