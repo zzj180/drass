@@ -606,11 +606,20 @@ LLM_BASE_URL="http://localhost:8001/v1"
 OPENAI_API_BASE="http://localhost:8001/v1"
 OPENAI_API_KEY="123456"
 
-# Embedding Configuration
+# Embedding Configuration - Using vLLM embedding service
 EMBEDDING_PROVIDER="openai"
 EMBEDDING_MODEL="Qwen3-Embedding-8B"
 EMBEDDING_API_KEY="123456"
 EMBEDDING_API_BASE="http://localhost:8010/v1"
+EMBEDDING_DIMENSIONS=1024
+EMBEDDING_BATCH_SIZE=100
+
+# Reranking Configuration - Using vLLM reranking service
+RERANKING_ENABLED=true
+RERANKING_PROVIDER="custom"
+RERANKING_MODEL="Qwen3-Reranker-8B"
+RERANKING_API_KEY="123456"
+RERANKING_API_BASE="http://localhost:8012/v1"
 
 # Vector Store
 VECTOR_STORE_TYPE="chroma"
@@ -698,8 +707,20 @@ EOF
             export OPENAI_API_BASE="http://localhost:8001/v1"
             export OPENAI_API_KEY="123456"
 
+            # Export Embedding configuration for vLLM embedding service
+            export EMBEDDING_PROVIDER="openai"
+            export EMBEDDING_MODEL="Qwen3-Embedding-8B"
+            export EMBEDDING_API_KEY="123456"
+            export EMBEDDING_API_BASE="http://localhost:8010/v1"
+            export EMBEDDING_DIMENSIONS=1024
+
+            # Export Reranking configuration for vLLM reranking service
+            export RERANKING_ENABLED=true
+            export RERANKING_API_BASE="http://localhost:8012/v1"
+            export RERANKING_API_KEY="123456"
+
             # Try with different worker counts and without proxy
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' OPENAI_API_BASE='http://localhost:8001/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' OPENAI_API_BASE='http://localhost:8001/v1' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server

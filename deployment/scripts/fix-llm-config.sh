@@ -49,11 +49,27 @@ fi
 echo -e "\n${BLUE}Testing vLLM endpoints...${NC}"
 
 # Test LLM endpoint
-echo -e "${BLUE}Testing LLM endpoint...${NC}"
+echo -e "${BLUE}Testing LLM endpoint (8001)...${NC}"
 if curl -s -H "Authorization: Bearer 123456" http://localhost:8001/v1/models | grep -q "model"; then
     echo -e "${GREEN}✓${NC} LLM endpoint is responding"
 else
     echo -e "${YELLOW}!${NC} LLM endpoint not responding properly"
+fi
+
+# Test Embedding endpoint
+echo -e "${BLUE}Testing Embedding endpoint (8010)...${NC}"
+if curl -s -H "Authorization: Bearer 123456" http://localhost:8010/v1/models 2>/dev/null | grep -q "model\|Qwen"; then
+    echo -e "${GREEN}✓${NC} Embedding endpoint is responding"
+else
+    echo -e "${YELLOW}!${NC} Embedding endpoint not responding properly"
+fi
+
+# Test Reranking endpoint
+echo -e "${BLUE}Testing Reranking endpoint (8012)...${NC}"
+if curl -s -H "Authorization: Bearer 123456" http://localhost:8012/v1/models 2>/dev/null | grep -q "model\|Qwen"; then
+    echo -e "${GREEN}✓${NC} Reranking endpoint is responding"
+else
+    echo -e "${YELLOW}!${NC} Reranking endpoint not responding properly"
 fi
 
 # Create .env file
@@ -98,14 +114,17 @@ OPENAI_API_BASE="http://localhost:8001/v1"
 OPENAI_API_KEY="123456"
 OPENAI_MODEL="vllm"
 
-# Embedding Configuration
+# Embedding Configuration - Using vLLM embedding service on port 8010
 EMBEDDING_PROVIDER="openai"
 EMBEDDING_MODEL="Qwen3-Embedding-8B"
 EMBEDDING_API_KEY="123456"
 EMBEDDING_API_BASE="http://localhost:8010/v1"
+EMBEDDING_DIMENSIONS=1024
+EMBEDDING_BATCH_SIZE=100
 
-# Reranking Configuration
+# Reranking Configuration - Using vLLM reranking service on port 8012
 RERANKING_ENABLED=true
+RERANKING_PROVIDER="custom"
 RERANKING_MODEL="Qwen3-Reranker-8B"
 RERANKING_API_KEY="123456"
 RERANKING_API_BASE="http://localhost:8012/v1"
@@ -227,6 +246,11 @@ export LLM_API_KEY="123456"
 export LLM_BASE_URL="http://localhost:8001/v1"
 export OPENAI_API_BASE="http://localhost:8001/v1"
 export OPENAI_API_KEY="123456"
+export EMBEDDING_API_BASE="http://localhost:8010/v1"
+export EMBEDDING_API_KEY="123456"
+export EMBEDDING_MODEL="Qwen3-Embedding-8B"
+export RERANKING_API_BASE="http://localhost:8012/v1"
+export RERANKING_API_KEY="123456"
 
 # Load .env if exists
 if [ -f .env ]; then
