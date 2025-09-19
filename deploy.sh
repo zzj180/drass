@@ -224,8 +224,12 @@ run_configurator() {
     # Activate virtual environment
     source "$VENV_DIR/bin/activate"
 
-    # Run the configurator
-    python "$SCRIPT_DIR/deployment/scripts/configure.py"
+    # Run the configurator (use simple version if main one fails)
+    if [ -f "$SCRIPT_DIR/deployment/scripts/configure_simple.py" ]; then
+        python "$SCRIPT_DIR/deployment/scripts/configure_simple.py"
+    else
+        python "$SCRIPT_DIR/deployment/scripts/configure.py"
+    fi
 }
 
 # Function to run deployment

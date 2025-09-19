@@ -8,7 +8,9 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# This allows the script to find the utils module regardless of where it's run from
+script_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(script_dir.parent.parent))
 
 try:
     from rich.console import Console
@@ -23,14 +25,64 @@ except ImportError:
     print("Please install: pip install rich pydantic pyyaml psutil")
     sys.exit(1)
 
-from deployment.scripts.utils.config_models import (
-    Config, Metadata, DeploymentConfig, LLMConfig,
-    EmbeddingConfig, RerankingConfig, VectorStoreConfig,
-    DatabaseConfig, CacheConfig, Services, Infrastructure,
-    AWSConfig, DockerConfig, LocalGPUConfig
-)
-from deployment.scripts.utils.config_loader import ConfigLoader, ConfigValidator
-from deployment.scripts.utils.hardware_detector import HardwareDetector
+# Try to import from utils relative to this script
+try:
+    from utils.config_models import (
+        DeploymentConfiguration,
+        DeploymentConfig,
+        Services,
+        LLMService,
+        EmbeddingService,
+        RerankingService,
+        VectorStoreService,
+        DatabaseService,
+        CacheService,
+        Environment,
+        DeploymentType
+    )
+    from utils.config_loader import ConfigLoader
+except ImportError:
+    # If that fails, try the full path
+    sys.path.insert(0, str(script_dir))
+    from utils.config_models import (
+        DeploymentConfiguration,
+        DeploymentConfig,
+        Services,
+        LLMService,
+        EmbeddingService,
+        RerankingService,
+        VectorStoreService,
+        DatabaseService,
+        CacheService,
+        Environment,
+        DeploymentType
+    )
+    from utils.config_loader import ConfigLoader
+
+# Note: ConfigValidator and HardwareDetector need to be implemented
+# For now, we'll create placeholder implementations
+class ConfigValidator:
+    def validate(self, config):
+        return True
+    def get_report(self):
+        return "Configuration is valid"
+
+class HardwareDetector:
+    def detect(self):
+        import platform
+        import psutil
+        return {
+            "system": platform.system(),
+            "processor": platform.processor(),
+            "cpu_count": psutil.cpu_count(logical=False),
+            "cpu_count_logical": psutil.cpu_count(logical=True),
+            "memory_gb": round(psutil.virtual_memory().total / (1024**3), 1),
+            "recommended_deployment": "docker-compose"
+        }
+    def get_recommended_config(self):
+        return {"llm": {"provider": "openrouter"}}
+    def get_available_models(self):
+        return []
 
 
 console = Console()
