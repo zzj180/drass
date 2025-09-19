@@ -1217,68 +1217,76 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
         # Try different methods to serve the frontend
         FRONTEND_STARTED=false
 
-        # Method 1: Try global serve with different syntax
-        if command -v serve >/dev/null 2>&1; then
-            echo -e "${BLUE}Checking serve version...${NC}"
+        # Method 1: Use Python HTTP server (most reliable)
+        if [ "$FRONTEND_STARTED" = false ] && command -v python3 >/dev/null 2>&1; then
+            echo -e "${BLUE}Using Python HTTP server (recommended)...${NC}"
 
-            # Check which version/type of serve is installed
-            SERVE_VERSION=$(serve --version 2>&1 || serve -V 2>&1 || echo "unknown")
-            echo -e "Serve version/info: $SERVE_VERSION"
+            # Create a Python SPA server script for better routing support
+            cat > "$BASE_DIR/frontend/serve_spa.py" << 'EOF'
+#!/usr/bin/env python3
+import http.server
+import socketserver
+import os
+import sys
+from pathlib import Path
 
-            # Check if it's the npm serve package
-            if serve --help 2>&1 | grep -q "Static file serving" || serve --help 2>&1 | grep -q "\-s,.*\-\-single"; then
-                echo -e "${BLUE}Using npm serve package...${NC}"
-                start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
-            elif serve --help 2>&1 | grep -q "serve \[OPTIONS\] COMMAND"; then
-                # This looks like a different serve command (possibly from another package)
-                echo -e "${YELLOW}Different serve command detected, skipping...${NC}"
-            else
-                # Try the standard npm serve syntax anyway
-                echo -e "${BLUE}Trying standard serve syntax...${NC}"
-                start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve dist -p 5173" "$LOG_DIR/drass-frontend.log" 5173
-            fi
+PORT = 5173
+DIRECTORY = "dist"
 
+class SPAHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+    def do_GET(self):
+        path = self.translate_path(self.path)
+        if not os.path.exists(path) or os.path.isdir(path):
+            self.path = '/index.html'
+        return http.server.SimpleHTTPRequestHandler.do_GET(self)
+
+    def end_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        super().end_headers()
+
+    def log_message(self, format, *args):
+        if '/assets/' not in args[0]:
+            super().log_message(format, *args)
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+with socketserver.TCPServer(("0.0.0.0", PORT), SPAHandler) as httpd:
+    print(f"Frontend server running at http://0.0.0.0:{PORT}/")
+    httpd.serve_forever()
+EOF
+            chmod +x "$BASE_DIR/frontend/serve_spa.py"
+
+            start_service "Drass Frontend Python" "cd $BASE_DIR/frontend && python3 serve_spa.py" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
+
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
-                echo -e "${GREEN}✓${NC} Frontend started with serve"
+                echo -e "${GREEN}✓${NC} Frontend started with Python SPA server"
             fi
         fi
 
-        # Method 2: Try npx serve (force npm package)
+        # Method 2: Try npx serve (if Python fails)
         if [ "$FRONTEND_STARTED" = false ]; then
-            echo -e "${BLUE}Trying npx serve (forcing npm package)...${NC}"
-            # First try the standard syntax
-            if ! start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173; then
-                # If that fails, try alternative syntax
-                echo -e "${BLUE}Trying alternative npx serve syntax...${NC}"
-                start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve dist -p 5173" "$LOG_DIR/drass-frontend.log" 5173
-            fi
-
-            sleep 3
-            if lsof -i :5173 >/dev/null 2>&1; then
-                FRONTEND_STARTED=true
-                echo -e "${GREEN}✓${NC} Frontend started with npx serve"
-            fi
-        fi
-
-        # Method 3: Try Python HTTP server (most reliable fallback)
-        if [ "$FRONTEND_STARTED" = false ]; then
-            echo -e "${BLUE}Trying Python HTTP server (most reliable method)...${NC}"
-
-            # Check if Python3 is available
-            if command -v python3 >/dev/null 2>&1; then
-                start_service "Drass Frontend Python" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173 --bind 0.0.0.0" "$LOG_DIR/drass-frontend.log" 5173
+            # Check if npm serve is available
+            if npm list -g serve >/dev/null 2>&1 || npm list serve >/dev/null 2>&1; then
+                echo -e "${BLUE}Trying npx serve...${NC}"
+                start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
                 sleep 3
+
                 if lsof -i :5173 >/dev/null 2>&1; then
                     FRONTEND_STARTED=true
-                    echo -e "${GREEN}✓${NC} Frontend started with Python HTTP server"
+                    echo -e "${GREEN}✓${NC} Frontend started with npx serve"
                 fi
             fi
         fi
 
-        # Method 4: Try Node.js HTTP server
-        if [ "$FRONTEND_STARTED" = false ]; then
+        # Method 3: Try Node.js HTTP server (as last resort)
+        if [ "$FRONTEND_STARTED" = false ] && command -v node >/dev/null 2>&1; then
             echo -e "${BLUE}Creating Node.js static server...${NC}"
             cat > "$BASE_DIR/frontend/serve-static.js" << 'EOF'
 const http = require('http');
@@ -1288,48 +1296,46 @@ const path = require('path');
 const PORT = 5173;
 const DIST_DIR = path.join(__dirname, 'dist');
 
+const mimeTypes = {
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.woff': 'application/font-woff',
+    '.woff2': 'application/font-woff2',
+    '.ttf': 'application/font-ttf',
+    '.eot': 'application/vnd.ms-fontobject'
+};
+
 const server = http.createServer((req, res) => {
     let filePath = path.join(DIST_DIR, req.url === '/' ? 'index.html' : req.url);
 
-    // Default to index.html for SPA routing
-    if (!fs.existsSync(filePath)) {
+    // Handle SPA routing
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         filePath = path.join(DIST_DIR, 'index.html');
     }
 
-    const extname = String(path.extname(filePath)).toLowerCase();
-    const mimeTypes = {
-        '.html': 'text/html',
-        '.js': 'text/javascript',
-        '.css': 'text/css',
-        '.json': 'application/json',
-        '.png': 'image/png',
-        '.jpg': 'image/jpg',
-        '.gif': 'image/gif',
-        '.svg': 'image/svg+xml',
-        '.wav': 'audio/wav',
-        '.mp4': 'video/mp4',
-        '.woff': 'application/font-woff',
-        '.ttf': 'application/font-ttf',
-        '.eot': 'application/vnd.ms-fontobject',
-        '.otf': 'application/font-otf',
-        '.wasm': 'application/wasm'
-    };
-
-    const contentType = mimeTypes[extname] || 'application/octet-stream';
-
-    fs.readFile(filePath, (error, content) => {
-        if (error) {
-            if(error.code == 'ENOENT') {
-                res.writeHead(404);
-                res.end('404 Not Found');
-            } else {
-                res.writeHead(500);
-                res.end('Server Error: '+error.code);
-            }
-        } else {
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(content, 'utf-8');
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            res.writeHead(404);
+            res.end('Not found');
+            return;
         }
+
+        const ext = path.extname(filePath);
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+        // Add CORS headers
+        res.writeHead(200, {
+            'Content-Type': contentType,
+            'Access-Control-Allow-Origin': '*'
+        });
+        res.end(content);
     });
 });
 
@@ -1337,17 +1343,31 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Frontend server running at http://localhost:${PORT}/`);
 });
 EOF
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend && node serve-static.js" "$LOG_DIR/drass-frontend.log" 5173
+            start_service "Drass Frontend Node" "cd $BASE_DIR/frontend && node serve-static.js" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
+
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
                 echo -e "${GREEN}✓${NC} Frontend started with Node.js static server"
             fi
         fi
 
+        # Method 4: Use serve-frontend.sh as fallback
+        if [ "$FRONTEND_STARTED" = false ] && [ -f "$BASE_DIR/serve-frontend.sh" ]; then
+            echo -e "${YELLOW}Trying serve-frontend.sh script...${NC}"
+            bash "$BASE_DIR/serve-frontend.sh"
+            sleep 3
+
+            if lsof -i :5173 >/dev/null 2>&1; then
+                FRONTEND_STARTED=true
+                echo -e "${GREEN}✓${NC} Frontend started with serve-frontend.sh"
+            fi
+        fi
+
         if [ "$FRONTEND_STARTED" = false ]; then
             echo -e "${RED}✗${NC} Failed to start frontend with production build"
             echo -e "${YELLOW}Check logs at: $LOG_DIR/drass-frontend.log${NC}"
+            echo -e "${YELLOW}You can try manually: bash $BASE_DIR/serve-frontend.sh${NC}"
         fi
     else
         echo -e "${YELLOW}Frontend build not found, starting development server...${NC}"
