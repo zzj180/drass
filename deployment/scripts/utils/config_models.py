@@ -1,401 +1,385 @@
-"""Configuration models using Pydantic for validation and type safety."""
-
-from typing import Dict, List, Optional, Any, Literal
-from pydantic import BaseModel, Field, field_validator
-from datetime import datetime
-from pathlib import Path
-
-
-class Metadata(BaseModel):
-    """Configuration metadata."""
-    name: str = Field(..., description="Configuration name")
-    version: str = Field(default="1.0", description="Configuration version")
-    created_at: datetime = Field(default_factory=datetime.now)
-    description: Optional[str] = None
-    author: Optional[str] = None
+"""
+Pydantic models for deployment configuration validation
+"""
+from typing import Dict, List, Optional, Union, Literal
+from enum import Enum
+from pydantic import BaseModel, Field, validator, root_validator
+import re
 
 
-class AWSConfig(BaseModel):
-    """AWS infrastructure configuration."""
-    region: str = Field(default="us-west-2")
-    vpc_id: Optional[str] = None
-    subnet_ids: List[str] = Field(default_factory=list)
-    security_group_ids: List[str] = Field(default_factory=list)
-    instance_types: Dict[str, str] = Field(default_factory=dict)
-    ecs_cluster: Optional[str] = None
-    ecr_registry: Optional[str] = None
-    s3_bucket: Optional[str] = None
+class DeploymentType(str, Enum):
+    """Deployment target types"""
+    DOCKER_COMPOSE = "docker-compose"
+    LOCAL_GPU = "local-gpu"
+    AWS = "aws"
+    KUBERNETES = "kubernetes"
 
 
-class DockerConfig(BaseModel):
-    """Docker configuration."""
-    compose_file: str = Field(default="docker-compose.yml")
-    network: str = Field(default="drass-network")
-    registry: Optional[str] = None
-    build_args: Dict[str, str] = Field(default_factory=dict)
-    volumes: Dict[str, str] = Field(default_factory=dict)
+class Environment(str, Enum):
+    """Deployment environments"""
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
 
 
-class LocalGPUConfig(BaseModel):
-    """Local GPU configuration."""
-    gpu_type: Literal["nvidia", "apple_silicon", "amd"] = "nvidia"
-    cuda_version: Optional[str] = None
-    gpu_memory: Optional[str] = None
-    gpu_count: int = 1
-    metal_enabled: bool = False
-    mlx_enabled: bool = False
+class LLMProvider(str, Enum):
+    """LLM service providers"""
+    OPENROUTER = "openrouter"
+    OPENAI = "openai"
+    LOCAL_MLX = "local-mlx"
+    VLLM = "vllm"
+    OLLAMA = "ollama"
+    AZURE = "azure"
 
 
-class Infrastructure(BaseModel):
-    """Infrastructure configuration."""
-    aws: Optional[AWSConfig] = None
-    docker: Optional[DockerConfig] = None
-    local_gpu: Optional[LocalGPUConfig] = None
+class EmbeddingProvider(str, Enum):
+    """Embedding service providers"""
+    OPENAI = "openai"
+    COHERE = "cohere"
+    LOCAL = "local"
+    SENTENCE_TRANSFORMERS = "sentence-transformers"
 
 
-class LLMConfig(BaseModel):
-    """LLM service configuration."""
-    provider: Literal["openrouter", "openai", "azure", "local-mlx", "vllm", "ollama", "llamacpp"]
+class VectorStoreProvider(str, Enum):
+    """Vector store providers"""
+    CHROMADB = "chromadb"
+    WEAVIATE = "weaviate"
+    PINECONE = "pinecone"
+    QDRANT = "qdrant"
+    MILVUS = "milvus"
+
+
+class DatabaseProvider(str, Enum):
+    """Database providers"""
+    POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
+    MONGODB = "mongodb"
+
+
+class CacheProvider(str, Enum):
+    """Cache providers"""
+    REDIS = "redis"
+    MEMCACHED = "memcached"
+    DYNAMODB = "dynamodb"
+
+
+class ResourceSpec(BaseModel):
+    """Resource specification"""
+    request: Optional[str] = Field(None, description="Minimum required resources")
+    limit: Optional[str] = Field(None, description="Maximum allowed resources")
+
+
+class GPUSpec(BaseModel):
+    """GPU specification"""
+    enabled: bool = Field(False, description="Enable GPU support")
+    type: Optional[Literal["nvidia", "amd", "apple-silicon", "intel"]] = None
+    count: int = Field(1, ge=0, description="Number of GPUs")
+    memory: Optional[str] = Field(None, pattern=r"^\d+(G|Gi)$", description="GPU memory")
+
+
+class StorageSpec(BaseModel):
+    """Storage specification"""
+    size: str = Field(..., pattern=r"^\d+(G|Gi|T|Ti)$", description="Storage size")
+    type: Literal["ssd", "hdd", "nvme", "efs", "ebs"] = "ssd"
+    iops: Optional[int] = Field(None, description="IOPS for cloud storage")
+    encryption: bool = True
+
+
+class HealthCheck(BaseModel):
+    """Health check configuration"""
+    enabled: bool = True
+    path: str = "/health"
+    interval: int = Field(30, ge=1, description="Check interval in seconds")
+    timeout: int = Field(5, ge=1, description="Check timeout in seconds")
+    retries: int = Field(3, ge=1, description="Number of retries")
+
+
+class ServiceResources(BaseModel):
+    """Service resource allocation"""
+    cpu: Optional[str] = Field(None, pattern=r"^\d+(\.\d+)?$", description="CPU cores")
+    memory: Optional[str] = Field(None, pattern=r"^\d+(M|G|Mi|Gi)$", description="Memory allocation")
+
+
+class BaseService(BaseModel):
+    """Base service configuration"""
+    enabled: bool = True
+    image: Optional[str] = None
+    version: str = "latest"
+    replicas: int = Field(1, ge=0)
+    port: Optional[int] = Field(None, ge=1, le=65535)
+    environment: Dict[str, str] = Field(default_factory=dict)
+    resources: Optional[ServiceResources] = None
+    health_check: Optional[HealthCheck] = None
+
+
+class LLMService(BaseService):
+    """LLM service configuration"""
+    provider: LLMProvider
     model: str
     api_key: Optional[str] = None
     base_url: Optional[str] = None
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=4096, gt=0)
-    timeout: int = Field(default=60, gt=0)
-    context_length: int = Field(default=32768, gt=0)
+    temperature: float = Field(0.7, ge=0, le=2)
+    max_tokens: int = Field(2048, ge=1)
+    gpu_layers: Optional[int] = Field(None, ge=0, description="Layers to offload to GPU")
+    quantization: Optional[Literal["none", "int8", "int4", "fp16", "bf16"]] = None
 
-    # Provider-specific settings
-    # OpenRouter
-    openrouter_site_url: Optional[str] = None
-    openrouter_app_name: Optional[str] = None
-
-    # Azure
-    azure_deployment_name: Optional[str] = None
-    azure_api_version: Optional[str] = None
-
-    # Local MLX
-    mlx_model_path: Optional[str] = None
-    mlx_precision: Literal["float16", "bfloat16", "int8", "int4"] = "bfloat16"
-
-    # vLLM
-    vllm_gpu_memory_utilization: float = Field(default=0.9, ge=0.0, le=1.0)
-    vllm_max_model_len: Optional[int] = None
-
-    # Ollama
-    ollama_num_predict: Optional[int] = None
-    ollama_num_ctx: Optional[int] = None
+    @validator("api_key")
+    def validate_api_key(cls, v, values):
+        """Validate API key requirement based on provider"""
+        provider = values.get("provider")
+        if provider in [LLMProvider.OPENROUTER, LLMProvider.OPENAI, LLMProvider.AZURE]:
+            if not v:
+                raise ValueError(f"API key required for {provider}")
+        return v
 
 
-class EmbeddingConfig(BaseModel):
-    """Embedding service configuration."""
-    provider: Literal["openai", "local", "huggingface", "cohere"]
-    model: str
+class EmbeddingService(BaseService):
+    """Embedding service configuration"""
+    provider: EmbeddingProvider
+    model: str = "text-embedding-ada-002"
     api_key: Optional[str] = None
-    api_base: Optional[str] = None
-    batch_size: int = Field(default=100, gt=0)
-    dimensions: Optional[int] = None
-
-    # Local settings
-    local_model_path: Optional[str] = None
-    device: Literal["cpu", "cuda", "mps"] = "cpu"
+    batch_size: int = Field(100, ge=1)
+    dimensions: Optional[int] = Field(None, ge=1)
 
 
-class RerankingConfig(BaseModel):
-    """Reranking service configuration."""
-    enabled: bool = True
+class RerankingService(BaseService):
+    """Reranking service configuration"""
     provider: Literal["cohere", "local", "cross-encoder"]
-    model: str
+    model: Optional[str] = None
     api_key: Optional[str] = None
-    api_base: Optional[str] = None
-    top_k: int = Field(default=10, gt=0)
-
-    # Local settings
-    local_model_path: Optional[str] = None
-    device: Literal["cpu", "cuda", "mps"] = "cpu"
+    top_k: int = Field(10, ge=1)
 
 
-class DocumentProcessorConfig(BaseModel):
-    """Document processor configuration."""
-    enabled: bool = True
-    api_base: str = Field(default="http://localhost:8003")
-    max_file_size: str = Field(default="100MB")
-    supported_formats: List[str] = Field(
-        default=["pdf", "docx", "xlsx", "pptx", "txt", "md", "html", "csv"]
-    )
-    ocr_enabled: bool = True
-    ocr_language: str = Field(default="eng")
-
-
-class VectorStoreConfig(BaseModel):
-    """Vector store configuration."""
-    type: Literal["chromadb", "weaviate", "pinecone", "qdrant", "milvus"]
-    host: str = Field(default="localhost")
-    port: int = Field(default=8000, gt=0)
-    collection_name: str = Field(default="drass_docs")
-
-    # Auth
-    api_key: Optional[str] = None
+class ConnectionConfig(BaseModel):
+    """Database/service connection configuration"""
+    host: str
+    port: int = Field(..., ge=1, le=65535)
     username: Optional[str] = None
     password: Optional[str] = None
-
-    # Provider-specific
-    # Pinecone
-    pinecone_environment: Optional[str] = None
-    pinecone_index_name: Optional[str] = None
-
-    # Weaviate
-    weaviate_scheme: Literal["http", "https"] = "http"
-    weaviate_class_name: Optional[str] = None
-
-    # Qdrant
-    qdrant_grpc_port: Optional[int] = None
-    qdrant_prefer_grpc: bool = False
+    database: Optional[str] = None
+    api_key: Optional[str] = None
+    index_name: Optional[str] = None
 
 
-class DatabaseConfig(BaseModel):
-    """Database configuration."""
-    type: Literal["postgresql", "mysql", "sqlite"]
-    host: str = Field(default="localhost")
-    port: int = Field(default=5432, gt=0)
-    database: str
-    user: Optional[str] = None
-    password: Optional[str] = None
-
-    # Connection pool
-    pool_size: int = Field(default=20, gt=0)
-    max_overflow: int = Field(default=0, ge=0)
-    pool_timeout: int = Field(default=30, gt=0)
-
-    # SQLite specific
-    sqlite_path: Optional[str] = None
+class VectorStoreService(BaseService):
+    """Vector store service configuration"""
+    provider: VectorStoreProvider
+    connection: Optional[ConnectionConfig] = None
+    persistence: Optional[Dict] = Field(
+        default_factory=lambda: {"enabled": True, "path": "./data/vector_store"}
+    )
 
 
-class CacheConfig(BaseModel):
-    """Cache configuration."""
-    type: Literal["redis", "memcached", "memory"]
-    host: str = Field(default="localhost")
-    port: int = Field(default=6379, gt=0)
-    password: Optional[str] = None
-    ttl: int = Field(default=3600, gt=0)
-    db: int = Field(default=0, ge=0)
+class PoolConfig(BaseModel):
+    """Database connection pool configuration"""
+    min_connections: int = Field(2, ge=1)
+    max_connections: int = Field(10, ge=1)
 
-    # Redis specific
-    redis_ssl: bool = False
-    redis_cluster_mode: bool = False
+    @validator("max_connections")
+    def validate_max_connections(cls, v, values):
+        """Ensure max >= min connections"""
+        min_conn = values.get("min_connections", 2)
+        if v < min_conn:
+            raise ValueError(f"max_connections ({v}) must be >= min_connections ({min_conn})")
+        return v
+
+
+class DatabaseService(BaseService):
+    """Database service configuration"""
+    provider: DatabaseProvider
+    connection: ConnectionConfig
+    pool: Optional[PoolConfig] = None
+
+
+class CacheService(BaseService):
+    """Cache service configuration"""
+    provider: CacheProvider
+    connection: Optional[ConnectionConfig] = None
+    ttl: int = Field(3600, ge=1, description="Default TTL in seconds")
 
 
 class Services(BaseModel):
-    """All services configuration."""
-    llm: LLMConfig
-    embedding: EmbeddingConfig
-    reranking: Optional[RerankingConfig] = None
-    document_processor: Optional[DocumentProcessorConfig] = None
-    vector_store: VectorStoreConfig
-    database: DatabaseConfig
-    cache: Optional[CacheConfig] = None
-
-
-class MainAppConfig(BaseModel):
-    """Main application configuration."""
-    host: str = Field(default="0.0.0.0")
-    port: int = Field(default=8000, gt=0)
-    workers: int = Field(default=4, gt=0)
-    enable_docs: bool = True
-    cors_origins: List[str] = Field(default=["http://localhost:5173"])
-
-    # Features
-    enable_streaming: bool = True
-    enable_agent: bool = True
-    enable_memory: bool = True
-
-    # Rate limiting
-    rate_limit_enabled: bool = True
-    rate_limit_per_minute: int = Field(default=60, gt=0)
-
-    # Security
-    jwt_enabled: bool = True
-    jwt_algorithm: str = Field(default="HS256")
-    access_token_expire_minutes: int = Field(default=30, gt=0)
-    refresh_token_expire_days: int = Field(default=7, gt=0)
-
-
-class FrontendConfig(BaseModel):
-    """Frontend configuration."""
-    port: int = Field(default=5173, gt=0)
-    build_mode: Literal["development", "production"] = "production"
-    api_base: str = Field(default="http://localhost:8000")
-    websocket_url: Optional[str] = None
-
-    # Build settings
-    source_map: bool = False
-    minify: bool = True
-    bundle_analyze: bool = False
-
-
-class Application(BaseModel):
-    """Application configuration."""
-    main_app: MainAppConfig = Field(default_factory=MainAppConfig)
-    frontend: FrontendConfig = Field(default_factory=FrontendConfig)
-
-
-class PrometheusConfig(BaseModel):
-    """Prometheus configuration."""
-    enabled: bool = True
-    port: int = Field(default=9090, gt=0)
-    scrape_interval: str = Field(default="15s")
-    retention: str = Field(default="15d")
-
-
-class GrafanaConfig(BaseModel):
-    """Grafana configuration."""
-    enabled: bool = True
-    port: int = Field(default=3000, gt=0)
-    admin_user: str = Field(default="admin")
-    admin_password: str = Field(default="admin")
-
-
-class Monitoring(BaseModel):
-    """Monitoring configuration."""
-    enabled: bool = True
-    prometheus: Optional[PrometheusConfig] = None
-    grafana: Optional[GrafanaConfig] = None
-
-    # Logging
-    log_aggregator: Optional[Literal["elasticsearch", "loki", "cloudwatch"]] = None
-    metrics_exporter: Optional[Literal["prometheus", "datadog", "newrelic"]] = None
-
-
-class Logging(BaseModel):
-    """Logging configuration."""
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-    format: Literal["json", "text"] = "json"
-    outputs: List[Dict[str, Any]] = Field(default_factory=lambda: [{"type": "console"}])
-
-    # File output
-    file_path: Optional[str] = None
-    file_rotation: bool = True
-    file_max_bytes: int = Field(default=10485760, gt=0)  # 10MB
-    file_backup_count: int = Field(default=5, gt=0)
+    """All service configurations"""
+    api: Optional[BaseService] = None
+    frontend: Optional[BaseService] = None
+    llm: Optional[LLMService] = None
+    embedding: Optional[EmbeddingService] = None
+    reranking: Optional[RerankingService] = None
+    vector_store: Optional[VectorStoreService] = None
+    database: Optional[DatabaseService] = None
+    cache: Optional[CacheService] = None
 
 
 class DeploymentConfig(BaseModel):
-    """Deployment configuration."""
-    type: Literal["aws", "docker-compose", "local-gpu", "local-cpu", "kubernetes"]
-    environment: Literal["development", "staging", "production"] = "development"
-
-    # Auto-scaling
-    auto_scaling_enabled: bool = False
-    min_replicas: int = Field(default=1, gt=0)
-    max_replicas: int = Field(default=10, gt=0)
-    target_cpu_percent: int = Field(default=70, gt=0, le=100)
-
-    # Health checks
-    health_check_enabled: bool = True
-    health_check_interval: int = Field(default=30, gt=0)
-    health_check_timeout: int = Field(default=10, gt=0)
-    health_check_retries: int = Field(default=3, gt=0)
+    """Deployment target configuration"""
+    type: DeploymentType
+    name: str = Field(..., pattern=r"^[a-z0-9-]+$", description="Deployment name")
+    environment: Environment = Environment.DEVELOPMENT
+    region: Optional[str] = None
+    profile: Optional[str] = None
 
 
-class Config(BaseModel):
-    """Main configuration model."""
-    version: str = Field(default="1.0")
-    metadata: Metadata
-    deployment: DeploymentConfig
-    infrastructure: Infrastructure
-    services: Services
-    application: Application = Field(default_factory=Application)
-    monitoring: Optional[Monitoring] = None
-    logging: Logging = Field(default_factory=Logging)
+class EnvironmentConfig(BaseModel):
+    """Environment variables and secrets configuration"""
+    variables: Dict[str, str] = Field(default_factory=dict)
+    secrets: Dict[str, str] = Field(default_factory=dict)
+    files: List[str] = Field(default_factory=list, description="Additional .env files")
 
-    @field_validator('version')
-    @classmethod
-    def validate_version(cls, v: str) -> str:
-        """Validate configuration version."""
-        supported_versions = ["1.0", "1.1"]
-        if v not in supported_versions:
-            raise ValueError(f"Unsupported version: {v}. Supported: {supported_versions}")
+
+class ResourcesConfig(BaseModel):
+    """Resource allocation configuration"""
+    cpu: Optional[ResourceSpec] = None
+    memory: Optional[ResourceSpec] = None
+    gpu: Optional[GPUSpec] = None
+    storage: Optional[StorageSpec] = None
+
+
+class LoadBalancerConfig(BaseModel):
+    """Load balancer configuration"""
+    enabled: bool = False
+    type: Optional[Literal["alb", "nlb", "nginx", "traefik"]] = None
+
+
+class NetworkingConfig(BaseModel):
+    """Network configuration"""
+    ports: Dict[str, int] = Field(default_factory=dict)
+    domain: Optional[str] = None
+    ssl: bool = False
+    load_balancer: Optional[LoadBalancerConfig] = None
+
+
+class ScalingConfig(BaseModel):
+    """Auto-scaling configuration"""
+    enabled: bool = False
+    min_instances: int = Field(1, ge=1)
+    max_instances: int = Field(10, ge=1)
+    target_cpu: float = Field(70, ge=0, le=100)
+
+    @validator("max_instances")
+    def validate_max_instances(cls, v, values):
+        """Ensure max >= min instances"""
+        min_inst = values.get("min_instances", 1)
+        if v < min_inst:
+            raise ValueError(f"max_instances ({v}) must be >= min_instances ({min_inst})")
         return v
 
-    def to_env(self) -> Dict[str, str]:
-        """Convert configuration to environment variables."""
-        env_vars = {}
 
-        # LLM configuration
-        llm = self.services.llm
-        env_vars["LLM_PROVIDER"] = llm.provider
-        env_vars["LLM_MODEL"] = llm.model
-        if llm.api_key:
-            env_vars["LLM_API_KEY"] = llm.api_key
-        if llm.base_url:
-            env_vars["LLM_BASE_URL"] = llm.base_url
-        env_vars["LLM_TEMPERATURE"] = str(llm.temperature)
-        env_vars["LLM_MAX_TOKENS"] = str(llm.max_tokens)
+class MonitoringConfig(BaseModel):
+    """Monitoring and logging configuration"""
+    enabled: bool = True
+    providers: List[Literal["prometheus", "grafana", "cloudwatch", "datadog", "newrelic"]] = Field(
+        default_factory=list
+    )
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-        # Embedding configuration
-        emb = self.services.embedding
-        env_vars["EMBEDDING_PROVIDER"] = emb.provider
-        env_vars["EMBEDDING_MODEL"] = emb.model
-        if emb.api_key:
-            env_vars["EMBEDDING_API_KEY"] = emb.api_key
-        if emb.api_base:
-            env_vars["EMBEDDING_API_BASE"] = emb.api_base
 
-        # Reranking configuration
-        if self.services.reranking:
-            rer = self.services.reranking
-            env_vars["RERANKING_ENABLED"] = str(rer.enabled).lower()
-            env_vars["RERANKING_PROVIDER"] = rer.provider
-            env_vars["RERANKING_MODEL"] = rer.model
-            if rer.api_key:
-                env_vars["RERANKING_API_KEY"] = rer.api_key
+class FirewallRule(BaseModel):
+    """Firewall rule configuration"""
+    port: int = Field(..., ge=1, le=65535)
+    protocol: Literal["tcp", "udp"] = "tcp"
+    source: str = "0.0.0.0/0"
 
-        # Vector store configuration
-        vec = self.services.vector_store
-        env_vars["VECTOR_STORE_TYPE"] = vec.type
-        env_vars["VECTOR_STORE_HOST"] = vec.host
-        env_vars["VECTOR_STORE_PORT"] = str(vec.port)
 
-        # Database configuration
-        db = self.services.database
-        env_vars["DATABASE_TYPE"] = db.type
-        if db.type != "sqlite":
-            env_vars["DATABASE_HOST"] = db.host
-            env_vars["DATABASE_PORT"] = str(db.port)
-            env_vars["DATABASE_NAME"] = db.database
-            if db.user:
-                env_vars["DATABASE_USER"] = db.user
-            if db.password:
-                env_vars["DATABASE_PASSWORD"] = db.password
+class SecurityConfig(BaseModel):
+    """Security configuration"""
+    encryption: bool = True
+    secrets_manager: Optional[Literal["aws-secrets", "vault", "local", "kubernetes"]] = "local"
+    firewall_rules: List[FirewallRule] = Field(default_factory=list)
 
-        # Cache configuration
-        if self.services.cache:
-            cache = self.services.cache
-            env_vars["CACHE_TYPE"] = cache.type
-            if cache.type != "memory":
-                env_vars["CACHE_HOST"] = cache.host
-                env_vars["CACHE_PORT"] = str(cache.port)
-                if cache.password:
-                    env_vars["CACHE_PASSWORD"] = cache.password
 
-        # Application configuration
-        app = self.application.main_app
-        env_vars["APP_HOST"] = app.host
-        env_vars["APP_PORT"] = str(app.port)
-        env_vars["APP_WORKERS"] = str(app.workers)
-        env_vars["ENABLE_STREAMING"] = str(app.enable_streaming).lower()
-        env_vars["ENABLE_AGENT"] = str(app.enable_agent).lower()
+class DeploymentConfiguration(BaseModel):
+    """Complete deployment configuration"""
+    deployment: DeploymentConfig
+    services: Services
+    environment: EnvironmentConfig
+    resources: Optional[ResourcesConfig] = None
+    networking: Optional[NetworkingConfig] = None
+    scaling: Optional[ScalingConfig] = None
+    monitoring: Optional[MonitoringConfig] = None
+    security: Optional[SecurityConfig] = None
 
-        # Frontend configuration
-        frontend = self.application.frontend
-        env_vars["FRONTEND_PORT"] = str(frontend.port)
-        env_vars["VITE_API_BASE"] = frontend.api_base
+    @root_validator
+    def validate_deployment_requirements(cls, values):
+        """Validate deployment-specific requirements"""
+        deployment = values.get("deployment")
+        if not deployment:
+            return values
 
-        # Deployment
-        env_vars["DEPLOYMENT_TYPE"] = self.deployment.type
-        env_vars["ENVIRONMENT"] = self.deployment.environment
+        deployment_type = deployment.type
+        services = values.get("services", Services())
 
-        # Logging
-        env_vars["LOG_LEVEL"] = self.logging.level
-        env_vars["LOG_FORMAT"] = self.logging.format
+        # AWS deployment requires certain configurations
+        if deployment_type == DeploymentType.AWS:
+            if not deployment.region:
+                raise ValueError("AWS deployment requires 'region' to be specified")
 
-        return env_vars
+        # Local GPU deployment requires GPU configuration
+        if deployment_type == DeploymentType.LOCAL_GPU:
+            resources = values.get("resources")
+            if not resources or not resources.gpu or not resources.gpu.enabled:
+                raise ValueError("Local GPU deployment requires GPU to be enabled in resources")
+
+        # Kubernetes deployment requires scaling configuration
+        if deployment_type == DeploymentType.KUBERNETES:
+            if not values.get("scaling"):
+                values["scaling"] = ScalingConfig(enabled=True)
+
+        return values
+
+    class Config:
+        """Pydantic configuration"""
+        use_enum_values = True
+        validate_assignment = True
+        extra = "forbid"
+
+    def to_yaml(self) -> str:
+        """Convert configuration to YAML string"""
+        import yaml
+        return yaml.dump(
+            self.dict(exclude_none=True, exclude_unset=True),
+            default_flow_style=False,
+            sort_keys=False
+        )
+
+    @classmethod
+    def from_yaml(cls, yaml_str: str) -> "DeploymentConfiguration":
+        """Create configuration from YAML string"""
+        import yaml
+        data = yaml.safe_load(yaml_str)
+        return cls(**data)
+
+    @classmethod
+    def from_file(cls, file_path: str) -> "DeploymentConfiguration":
+        """Load configuration from YAML file"""
+        with open(file_path, "r") as f:
+            return cls.from_yaml(f.read())
+
+    def save(self, file_path: str) -> None:
+        """Save configuration to YAML file"""
+        with open(file_path, "w") as f:
+            f.write(self.to_yaml())
+
+    def validate_completeness(self) -> List[str]:
+        """Check if all required services are configured"""
+        warnings = []
+
+        if not self.services.llm:
+            warnings.append("LLM service not configured")
+
+        if not self.services.database:
+            warnings.append("Database service not configured")
+
+        if not self.services.vector_store:
+            warnings.append("Vector store service not configured")
+
+        if self.deployment.environment == Environment.PRODUCTION:
+            if not self.monitoring or not self.monitoring.enabled:
+                warnings.append("Monitoring not enabled for production environment")
+
+            if not self.security or not self.security.encryption:
+                warnings.append("Encryption not enabled for production environment")
+
+            if not self.scaling or not self.scaling.enabled:
+                warnings.append("Auto-scaling not enabled for production environment")
+
+        return warnings

@@ -1,130 +1,157 @@
 # Docker Compose Deployment Template
-version: "1.0"
-
-metadata:
-  name: "docker-compose-template"
-  description: "Template for Docker Compose deployment"
-  author: "Drass Team"
+# Complete containerized environment for development and testing
 
 deployment:
-  type: "docker-compose"
-  environment: "development"  # development | staging | production
-  health_check_enabled: true
-  health_check_interval: 30
-  health_check_timeout: 10
-  health_check_retries: 3
-
-infrastructure:
-  docker:
-    compose_file: "docker-compose.yml"
-    network: "drass-network"
-    volumes:
-      data: "./data"
-      logs: "./logs"
-      models: "./models"
+  type: docker-compose
+  name: drass-docker
+  environment: development
 
 services:
-  llm:
-    provider: "openrouter"  # Options: openrouter | openai | local-mlx | vllm | ollama
-    model: "${LLM_MODEL:-anthropic/claude-3.5-sonnet}"
-    api_key: "${OPENROUTER_API_KEY}"
-    base_url: "https://openrouter.ai/api/v1"
-    temperature: 0.7
-    max_tokens: 4096
-    timeout: 60
-    context_length: 32768
-
-  embedding:
-    provider: "local"  # Options: openai | local | huggingface
-    model: "BAAI/bge-base-en-v1.5"
-    api_base: "http://embedding-service:8002"
-    batch_size: 100
-    dimensions: 768
-    device: "cpu"
-
-  reranking:
+  api:
     enabled: true
-    provider: "local"  # Options: cohere | local
-    model: "BAAI/bge-reranker-base"
-    api_base: "http://reranking-service:8004"
-    top_k: 10
-    device: "cpu"
-
-  document_processor:
-    enabled: true
-    api_base: "http://doc-processor:8003"
-    max_file_size: "100MB"
-    supported_formats: ["pdf", "docx", "xlsx", "pptx", "txt", "md", "html", "csv"]
-    ocr_enabled: true
-    ocr_language: "eng"
-
-  vector_store:
-    type: "chromadb"  # Options: chromadb | weaviate | pinecone | qdrant
-    host: "chromadb"
+    image: drass/api
+    version: latest
     port: 8000
-    collection_name: "drass_docs"
-
-  database:
-    type: "postgresql"
-    host: "postgres"
-    port: 5432
-    database: "compliance_assistant"
-    user: "${DB_USER:-postgres}"
-    password: "${DB_PASSWORD:-postgres}"
-    pool_size: 20
-    max_overflow: 0
-
-  cache:
-    type: "redis"
-    host: "redis"
-    port: 6379
-    password: "${REDIS_PASSWORD:-}"
-    ttl: 3600
-    db: 0
-
-application:
-  main_app:
-    host: "0.0.0.0"
-    port: 8000
-    workers: 4
-    enable_docs: true
-    cors_origins: ["http://localhost:5173", "http://localhost:3000"]
-    enable_streaming: true
-    enable_agent: true
-    enable_memory: true
-    rate_limit_enabled: true
-    rate_limit_per_minute: 60
-    jwt_enabled: false  # Set to true in production
-    jwt_algorithm: "HS256"
-    access_token_expire_minutes: 30
+    replicas: 1
+    environment:
+      LOG_LEVEL: INFO
+      ENABLE_CORS: "true"
+      ENABLE_STREAMING: "true"
+    resources:
+      cpu: "2"
+      memory: "2G"
+    health_check:
+      enabled: true
+      path: /health
+      interval: 30
+      timeout: 5
+      retries: 3
 
   frontend:
+    enabled: true
+    image: drass/frontend
+    version: latest
     port: 5173
-    build_mode: "development"
-    api_base: "http://localhost:8000"
-    websocket_url: "ws://localhost:8000/ws"
+    replicas: 1
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+    resources:
+      cpu: "1"
+      memory: "1G"
+
+  llm:
+    enabled: true
+    provider: openrouter
+    model: gpt-3.5-turbo
+    api_key: ${OPENROUTER_API_KEY}
+    temperature: 0.7
+    max_tokens: 2048
+    environment:
+      LOG_LEVEL: INFO
+
+  embedding:
+    enabled: true
+    provider: local
+    model: all-MiniLM-L6-v2
+    port: 8002
+    batch_size: 100
+    resources:
+      cpu: "1"
+      memory: "1G"
+
+  reranking:
+    enabled: false
+    provider: local
+    model: cross-encoder/ms-marco-MiniLM-L-12-v2
+    top_k: 10
+
+  vector_store:
+    enabled: true
+    provider: chromadb
+    connection:
+      host: localhost
+      port: 8005
+    persistence:
+      enabled: true
+      path: ./data/chromadb
+
+  database:
+    enabled: true
+    provider: postgresql
+    connection:
+      host: localhost
+      port: 5432
+      username: postgres
+      password: ${DB_PASSWORD}
+      database: drass
+    pool:
+      min_connections: 2
+      max_connections: 10
+
+  cache:
+    enabled: true
+    provider: redis
+    connection:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD}
+      db: 0
+    ttl: 3600
+
+environment:
+  variables:
+    NODE_ENV: development
+    PYTHONUNBUFFERED: "1"
+    DEPLOYMENT_TYPE: docker-compose
+  secrets:
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+    DB_PASSWORD: ${DB_PASSWORD}
+    REDIS_PASSWORD: ${REDIS_PASSWORD}
+    SECRET_KEY: ${SECRET_KEY}
+    JWT_SECRET: ${JWT_SECRET}
+  files:
+    - .env
+    - .env.local
+
+resources:
+  cpu:
+    request: "4"
+    limit: "8"
+  memory:
+    request: "8G"
+    limit: "16G"
+  storage:
+    size: "50G"
+    type: ssd
+    encryption: true
+
+networking:
+  ports:
+    api: 8000
+    frontend: 5173
+    database: 5432
+    redis: 6379
+    chromadb: 8005
+    embedding: 8002
+  ssl: false
+  load_balancer:
+    enabled: false
 
 monitoring:
-  enabled: false  # Set to true to enable monitoring
-  prometheus:
-    enabled: false
-    port: 9090
-    scrape_interval: "15s"
-    retention: "15d"
+  enabled: true
+  providers:
+    - prometheus
+    - grafana
+  log_level: INFO
 
-  grafana:
-    enabled: false
-    port: 3000
-    admin_user: "admin"
-    admin_password: "${GRAFANA_PASSWORD:-admin}"
-
-logging:
-  level: "INFO"
-  format: "json"
-  outputs:
-    - type: "console"
-    - type: "file"
-      path: "./logs/app.log"
-  file_rotation: true
-  file_max_bytes: 10485760  # 10MB
-  file_backup_count: 5
+security:
+  encryption: true
+  secrets_manager: local
+  firewall_rules:
+    - port: 8000
+      protocol: tcp
+      source: 0.0.0.0/0
+    - port: 5173
+      protocol: tcp
+      source: 0.0.0.0/0

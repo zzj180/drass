@@ -1,0 +1,14 @@
+# Deployment Directory
+
+This directory contains the flexible deployment configuration system for Drass.
+
+## Structure
+- `configs/` - Configuration files
+  - `templates/` - Base configuration templates
+  - `presets/` - Pre-configured deployment scenarios
+  - `user/` - User-specific configurations
+  - `examples/` - Example configurations
+- `scripts/` - Deployment scripts
+  - `utils/` - Utility modules
+- `docs/` - Documentation
+- `schemas/` - Configuration schemas

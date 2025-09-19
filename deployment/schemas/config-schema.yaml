@@ -1,0 +1,424 @@
+# Drass Deployment Configuration Schema
+# This schema defines the structure and validation rules for deployment configurations
+
+$schema: "http://json-schema.org/draft-07/schema#"
+title: "Drass Deployment Configuration"
+type: object
+required:
+  - deployment
+  - services
+  - environment
+properties:
+  deployment:
+    type: object
+    description: "Deployment target configuration"
+    required:
+      - type
+      - name
+    properties:
+      type:
+        type: string
+        enum: ["docker-compose", "local-gpu", "aws", "kubernetes"]
+        description: "Deployment target type"
+      name:
+        type: string
+        pattern: "^[a-z0-9-]+$"
+        description: "Deployment name (lowercase alphanumeric and hyphens)"
+      environment:
+        type: string
+        enum: ["development", "staging", "production"]
+        default: "development"
+        description: "Deployment environment"
+      region:
+        type: string
+        description: "AWS region or cloud provider region"
+      profile:
+        type: string
+        description: "AWS profile or cloud provider profile"
+
+  services:
+    type: object
+    description: "Service configurations"
+    properties:
+      api:
+        $ref: "#/definitions/service"
+      frontend:
+        $ref: "#/definitions/service"
+      llm:
+        $ref: "#/definitions/llm_service"
+      embedding:
+        $ref: "#/definitions/embedding_service"
+      reranking:
+        $ref: "#/definitions/reranking_service"
+      vector_store:
+        $ref: "#/definitions/vector_store_service"
+      database:
+        $ref: "#/definitions/database_service"
+      cache:
+        $ref: "#/definitions/cache_service"
+
+  environment:
+    type: object
+    description: "Environment variables and secrets"
+    properties:
+      variables:
+        type: object
+        additionalProperties:
+          type: string
+      secrets:
+        type: object
+        additionalProperties:
+          type: string
+      files:
+        type: array
+        items:
+          type: string
+        description: "Additional .env files to load"
+
+  resources:
+    type: object
+    description: "Resource allocation"
+    properties:
+      cpu:
+        $ref: "#/definitions/resource_spec"
+      memory:
+        $ref: "#/definitions/resource_spec"
+      gpu:
+        $ref: "#/definitions/gpu_spec"
+      storage:
+        $ref: "#/definitions/storage_spec"
+
+  networking:
+    type: object
+    description: "Network configuration"
+    properties:
+      ports:
+        type: object
+        additionalProperties:
+          type: integer
+      domain:
+        type: string
+      ssl:
+        type: boolean
+        default: false
+      load_balancer:
+        type: object
+        properties:
+          enabled:
+            type: boolean
+          type:
+            type: string
+            enum: ["alb", "nlb", "nginx", "traefik"]
+
+  scaling:
+    type: object
+    description: "Auto-scaling configuration"
+    properties:
+      enabled:
+        type: boolean
+        default: false
+      min_instances:
+        type: integer
+        minimum: 1
+        default: 1
+      max_instances:
+        type: integer
+        minimum: 1
+        default: 10
+      target_cpu:
+        type: number
+        minimum: 0
+        maximum: 100
+        default: 70
+
+  monitoring:
+    type: object
+    description: "Monitoring and logging configuration"
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      providers:
+        type: array
+        items:
+          type: string
+          enum: ["prometheus", "grafana", "cloudwatch", "datadog", "newrelic"]
+      log_level:
+        type: string
+        enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        default: "INFO"
+
+  security:
+    type: object
+    description: "Security configuration"
+    properties:
+      encryption:
+        type: boolean
+        default: true
+      secrets_manager:
+        type: string
+        enum: ["aws-secrets", "vault", "local", "kubernetes"]
+      firewall_rules:
+        type: array
+        items:
+          type: object
+          properties:
+            port:
+              type: integer
+            protocol:
+              type: string
+              enum: ["tcp", "udp"]
+            source:
+              type: string
+
+definitions:
+  service:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      image:
+        type: string
+        description: "Docker image or service identifier"
+      version:
+        type: string
+        default: "latest"
+      replicas:
+        type: integer
+        minimum: 0
+        default: 1
+      port:
+        type: integer
+      environment:
+        type: object
+        additionalProperties:
+          type: string
+      resources:
+        type: object
+        properties:
+          cpu:
+            type: string
+            pattern: "^[0-9]+(\\.[0-9]+)?$"
+            description: "CPU cores (e.g., '2' or '0.5')"
+          memory:
+            type: string
+            pattern: "^[0-9]+(M|G|Mi|Gi)$"
+            description: "Memory allocation (e.g., '2G' or '512Mi')"
+      health_check:
+        type: object
+        properties:
+          enabled:
+            type: boolean
+            default: true
+          path:
+            type: string
+            default: "/health"
+          interval:
+            type: integer
+            default: 30
+          timeout:
+            type: integer
+            default: 5
+          retries:
+            type: integer
+            default: 3
+
+  llm_service:
+    allOf:
+      - $ref: "#/definitions/service"
+      - type: object
+        properties:
+          provider:
+            type: string
+            enum: ["openrouter", "openai", "local-mlx", "vllm", "ollama", "azure"]
+          model:
+            type: string
+            description: "Model identifier"
+          api_key:
+            type: string
+            description: "API key for cloud providers"
+          base_url:
+            type: string
+            description: "Base URL for API endpoints"
+          temperature:
+            type: number
+            minimum: 0
+            maximum: 2
+            default: 0.7
+          max_tokens:
+            type: integer
+            minimum: 1
+            default: 2048
+          gpu_layers:
+            type: integer
+            description: "Number of layers to offload to GPU (local models)"
+          quantization:
+            type: string
+            enum: ["none", "int8", "int4", "fp16", "bf16"]
+
+  embedding_service:
+    allOf:
+      - $ref: "#/definitions/service"
+      - type: object
+        properties:
+          provider:
+            type: string
+            enum: ["openai", "cohere", "local", "sentence-transformers"]
+          model:
+            type: string
+            default: "text-embedding-ada-002"
+          api_key:
+            type: string
+          batch_size:
+            type: integer
+            default: 100
+          dimensions:
+            type: integer
+            description: "Embedding dimensions"
+
+  reranking_service:
+    allOf:
+      - $ref: "#/definitions/service"
+      - type: object
+        properties:
+          provider:
+            type: string
+            enum: ["cohere", "local", "cross-encoder"]
+          model:
+            type: string
+          api_key:
+            type: string
+          top_k:
+            type: integer
+            default: 10
+
+  vector_store_service:
+    allOf:
+      - $ref: "#/definitions/service"
+      - type: object
+        properties:
+          provider:
+            type: string
+            enum: ["chromadb", "weaviate", "pinecone", "qdrant", "milvus"]
+          connection:
+            type: object
+            properties:
+              host:
+                type: string
+              port:
+                type: integer
+              api_key:
+                type: string
+              index_name:
+                type: string
+          persistence:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                default: true
+              path:
+                type: string
+                default: "./data/vector_store"
+
+  database_service:
+    allOf:
+      - $ref: "#/definitions/service"
+      - type: object
+        properties:
+          provider:
+            type: string
+            enum: ["postgresql", "mysql", "mongodb"]
+          connection:
+            type: object
+            properties:
+              host:
+                type: string
+              port:
+                type: integer
+              username:
+                type: string
+              password:
+                type: string
+              database:
+                type: string
+          pool:
+            type: object
+            properties:
+              min_connections:
+                type: integer
+                default: 2
+              max_connections:
+                type: integer
+                default: 10
+
+  cache_service:
+    allOf:
+      - $ref: "#/definitions/service"
+      - type: object
+        properties:
+          provider:
+            type: string
+            enum: ["redis", "memcached", "dynamodb"]
+          connection:
+            type: object
+            properties:
+              host:
+                type: string
+              port:
+                type: integer
+              password:
+                type: string
+              db:
+                type: integer
+                default: 0
+          ttl:
+            type: integer
+            description: "Default TTL in seconds"
+            default: 3600
+
+  resource_spec:
+    type: object
+    properties:
+      request:
+        type: string
+        description: "Minimum required resources"
+      limit:
+        type: string
+        description: "Maximum allowed resources"
+
+  gpu_spec:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: false
+      type:
+        type: string
+        enum: ["nvidia", "amd", "apple-silicon", "intel"]
+      count:
+        type: integer
+        minimum: 0
+        default: 1
+      memory:
+        type: string
+        pattern: "^[0-9]+(G|Gi)$"
+        description: "GPU memory (e.g., '16G')"
+
+  storage_spec:
+    type: object
+    properties:
+      size:
+        type: string
+        pattern: "^[0-9]+(G|Gi|T|Ti)$"
+        description: "Storage size (e.g., '100G' or '1Ti')"
+      type:
+        type: string
+        enum: ["ssd", "hdd", "nvme", "efs", "ebs"]
+      iops:
+        type: integer
+        description: "IOPS for cloud storage"
+      encryption:
+        type: boolean
+        default: true

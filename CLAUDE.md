@@ -214,7 +214,7 @@ python test_simple_expansion.py     # Test simple expansion logic
 
 ### Integration Points
 
-- **LLM Providers**: 
+- **LLM Providers**:
   - OpenRouter for cloud models
   - Local Qwen3-8B-MLX via custom API server
   - Ollama for local model management

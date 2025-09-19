@@ -1,350 +1,434 @@
-"""Configuration loader and validator utilities."""
-
+"""
+Configuration loader and manager for deployment configurations
+"""
 import os
-import yaml
 import json
+import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from pydantic import ValidationError
+from typing import Dict, Any, Optional, List, Union
+from jsonschema import validate, ValidationError, Draft7Validator
+import logging
 
-from .config_models import Config
+from .config_models import DeploymentConfiguration
 
-
-class ConfigError(Exception):
-    """Configuration related errors."""
-    pass
+logger = logging.getLogger(__name__)
 
 
 class ConfigLoader:
-    """Load and validate configuration files."""
+    """Load and manage deployment configurations"""
 
-    def __init__(self, config_dir: Optional[Path] = None):
-        """Initialize config loader.
+    def __init__(self, base_path: str = None):
+        """
+        Initialize configuration loader
 
         Args:
-            config_dir: Base directory for configurations
+            base_path: Base path for configuration files
         """
-        self.config_dir = config_dir or Path(__file__).parent.parent.parent / "configs"
+        self.base_path = Path(base_path) if base_path else Path(__file__).parent.parent.parent
+        self.configs_path = self.base_path / "configs"
+        self.templates_path = self.configs_path / "templates"
+        self.presets_path = self.configs_path / "presets"
+        self.user_path = self.configs_path / "user"
+        self.schema_path = self.base_path / "schemas" / "config-schema.yaml"
 
-    def load_yaml(self, file_path: Path) -> Dict[str, Any]:
-        """Load YAML file.
+        # Create directories if they don't exist
+        for path in [self.configs_path, self.templates_path, self.presets_path, self.user_path]:
+            path.mkdir(parents=True, exist_ok=True)
+
+        # Load schema if available
+        self.schema = self._load_schema()
+
+    def _load_schema(self) -> Optional[Dict]:
+        """Load YAML schema for validation"""
+        if self.schema_path.exists():
+            try:
+                with open(self.schema_path, "r") as f:
+                    return yaml.safe_load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load schema: {e}")
+                return None
+        return None
+
+    def load_yaml(self, file_path: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Load YAML configuration file
 
         Args:
             file_path: Path to YAML file
 
         Returns:
-            Parsed YAML content
+            Dictionary containing configuration
 
         Raises:
-            ConfigError: If file cannot be loaded
+            FileNotFoundError: If file doesn't exist
+            yaml.YAMLError: If YAML parsing fails
         """
-        try:
-            with open(file_path, 'r') as f:
-                content = yaml.safe_load(f)
-                return content or {}
-        except FileNotFoundError:
-            raise ConfigError(f"Configuration file not found: {file_path}")
-        except yaml.YAMLError as e:
-            raise ConfigError(f"Invalid YAML in {file_path}: {e}")
-        except Exception as e:
-            raise ConfigError(f"Error loading {file_path}: {e}")
+        file_path = Path(file_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {file_path}")
 
-    def load_json(self, file_path: Path) -> Dict[str, Any]:
-        """Load JSON file.
+        try:
+            with open(file_path, "r") as f:
+                data = yaml.safe_load(f)
+                if data is None:
+                    return {}
+                return data
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Failed to parse YAML file {file_path}: {e}")
+
+    def save_yaml(self, config: Dict[str, Any], file_path: Union[str, Path]) -> None:
+        """
+        Save configuration to YAML file
+
+        Args:
+            config: Configuration dictionary
+            file_path: Path to save YAML file
+        """
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(file_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False, indent=2)
+        logger.info(f"Configuration saved to {file_path}")
+
+    def load_json(self, file_path: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Load JSON configuration file
 
         Args:
             file_path: Path to JSON file
 
         Returns:
-            Parsed JSON content
-
-        Raises:
-            ConfigError: If file cannot be loaded
+            Dictionary containing configuration
         """
-        try:
-            with open(file_path, 'r') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            raise ConfigError(f"Configuration file not found: {file_path}")
-        except json.JSONDecodeError as e:
-            raise ConfigError(f"Invalid JSON in {file_path}: {e}")
-        except Exception as e:
-            raise ConfigError(f"Error loading {file_path}: {e}")
+        file_path = Path(file_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {file_path}")
 
-    def load(self, file_path: Path) -> Config:
-        """Load and validate configuration file.
+        with open(file_path, "r") as f:
+            return json.load(f)
+
+    def save_json(self, config: Dict[str, Any], file_path: Union[str, Path]) -> None:
+        """
+        Save configuration to JSON file
 
         Args:
-            file_path: Path to configuration file
-
-        Returns:
-            Validated Config object
-
-        Raises:
-            ConfigError: If configuration is invalid
+            config: Configuration dictionary
+            file_path: Path to save JSON file
         """
-        # Determine file type
-        if file_path.suffix in ['.yaml', '.yml']:
-            data = self.load_yaml(file_path)
-        elif file_path.suffix == '.json':
-            data = self.load_json(file_path)
-        else:
-            raise ConfigError(f"Unsupported file format: {file_path.suffix}")
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Apply environment variable substitutions
-        data = self._substitute_env_vars(data)
-
-        # Validate with Pydantic
-        try:
-            config = Config(**data)
-            return config
-        except ValidationError as e:
-            errors = []
-            for error in e.errors():
-                field = '.'.join(str(x) for x in error['loc'])
-                msg = error['msg']
-                errors.append(f"  - {field}: {msg}")
-            raise ConfigError(f"Configuration validation failed:\n" + '\n'.join(errors))
-
-    def _substitute_env_vars(self, data: Any) -> Any:
-        """Recursively substitute environment variables.
-
-        Args:
-            data: Configuration data
-
-        Returns:
-            Data with environment variables substituted
-        """
-        if isinstance(data, dict):
-            return {k: self._substitute_env_vars(v) for k, v in data.items()}
-        elif isinstance(data, list):
-            return [self._substitute_env_vars(v) for v in data]
-        elif isinstance(data, str):
-            # Replace ${VAR_NAME} with environment variable value
-            import re
-            pattern = r'\$\{([^}]+)\}'
-
-            def replacer(match):
-                var_name = match.group(1)
-                # Check for default value syntax: ${VAR_NAME:-default_value}
-                if ':-' in var_name:
-                    var_name, default_value = var_name.split(':-', 1)
-                    return os.environ.get(var_name, default_value)
-                else:
-                    value = os.environ.get(var_name)
-                    if value is None:
-                        # Keep original if env var not found (for optional vars)
-                        return match.group(0)
-                    return value
-
-            return re.sub(pattern, replacer, data)
-        else:
-            return data
+        with open(file_path, "w") as f:
+            json.dump(config, f, indent=2)
+        logger.info(f"Configuration saved to {file_path}")
 
     def load_template(self, template_name: str) -> Dict[str, Any]:
-        """Load a configuration template.
+        """
+        Load configuration template
 
         Args:
-            template_name: Name of the template (without extension)
+            template_name: Name of template (without extension)
 
         Returns:
-            Template configuration data
-
-        Raises:
-            ConfigError: If template not found
+            Template configuration dictionary
         """
-        template_path = self.config_dir / "templates" / f"{template_name}.yaml"
-        if not template_path.exists():
-            raise ConfigError(f"Template not found: {template_name}")
-        return self.load_yaml(template_path)
+        template_file = self.templates_path / f"{template_name}.yaml"
+        if not template_file.exists():
+            # Try with .yml extension
+            template_file = self.templates_path / f"{template_name}.yml"
+            if not template_file.exists():
+                raise FileNotFoundError(f"Template not found: {template_name}")
 
-    def load_preset(self, preset_name: str) -> Config:
-        """Load a preset configuration.
+        return self.load_yaml(template_file)
+
+    def load_preset(self, preset_name: str) -> Dict[str, Any]:
+        """
+        Load configuration preset
 
         Args:
-            preset_name: Name of the preset (without extension)
+            preset_name: Name of preset (without extension)
 
         Returns:
-            Validated Config object
-
-        Raises:
-            ConfigError: If preset not found or invalid
+            Preset configuration dictionary
         """
-        preset_path = self.config_dir / "presets" / f"{preset_name}.yaml"
-        if not preset_path.exists():
-            raise ConfigError(f"Preset not found: {preset_name}")
-        return self.load(preset_path)
+        preset_file = self.presets_path / f"{preset_name}.yaml"
+        if not preset_file.exists():
+            preset_file = self.presets_path / f"{preset_name}.yml"
+            if not preset_file.exists():
+                raise FileNotFoundError(f"Preset not found: {preset_name}")
 
-    def merge_configs(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-        """Deep merge two configuration dictionaries.
+        return self.load_yaml(preset_file)
+
+    def list_templates(self) -> List[str]:
+        """
+        List available configuration templates
+
+        Returns:
+            List of template names
+        """
+        templates = []
+        for file in self.templates_path.glob("*.yaml"):
+            templates.append(file.stem)
+        for file in self.templates_path.glob("*.yml"):
+            if file.stem not in templates:
+                templates.append(file.stem)
+        return sorted(templates)
+
+    def list_presets(self) -> List[str]:
+        """
+        List available configuration presets
+
+        Returns:
+            List of preset names
+        """
+        presets = []
+        for file in self.presets_path.glob("*.yaml"):
+            presets.append(file.stem)
+        for file in self.presets_path.glob("*.yml"):
+            if file.stem not in presets:
+                presets.append(file.stem)
+        return sorted(presets)
+
+    def list_user_configs(self) -> List[str]:
+        """
+        List user configurations
+
+        Returns:
+            List of user configuration names
+        """
+        configs = []
+        for file in self.user_path.glob("*.yaml"):
+            configs.append(file.stem)
+        for file in self.user_path.glob("*.yml"):
+            if file.stem not in configs:
+                configs.append(file.stem)
+        return sorted(configs)
+
+    def merge_configs(self, *configs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge multiple configuration dictionaries
 
         Args:
-            base: Base configuration
-            override: Override configuration
+            *configs: Configuration dictionaries to merge
 
         Returns:
-            Merged configuration
+            Merged configuration dictionary
         """
-        result = base.copy()
-
-        for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self.merge_configs(result[key], value)
-            else:
-                result[key] = value
-
+        result = {}
+        for config in configs:
+            result = self._deep_merge(result, config)
         return result
 
-    def save(self, config: Config, file_path: Path, format: str = "yaml") -> None:
-        """Save configuration to file.
+    def _deep_merge(self, dict1: Dict, dict2: Dict) -> Dict:
+        """
+        Deep merge two dictionaries
 
         Args:
-            config: Config object to save
-            file_path: Path to save file
-            format: Output format ('yaml' or 'json')
+            dict1: Base dictionary
+            dict2: Dictionary to merge
 
-        Raises:
-            ConfigError: If save fails
+        Returns:
+            Merged dictionary
+        """
+        result = dict1.copy()
+        for key, value in dict2.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
+
+    def validate_schema(self, config: Dict[str, Any]) -> List[str]:
+        """
+        Validate configuration against schema
+
+        Args:
+            config: Configuration dictionary
+
+        Returns:
+            List of validation errors (empty if valid)
+        """
+        errors = []
+        if not self.schema:
+            logger.warning("No schema loaded for validation")
+            return errors
+
+        try:
+            validate(config, self.schema)
+        except ValidationError as e:
+            errors.append(str(e))
+            # Get all validation errors
+            validator = Draft7Validator(self.schema)
+            for error in validator.iter_errors(config):
+                error_path = " -> ".join(str(p) for p in error.path)
+                errors.append(f"At '{error_path}': {error.message}")
+
+        return errors
+
+    def validate_pydantic(self, config: Dict[str, Any]) -> tuple[bool, Union[DeploymentConfiguration, List[str]]]:
+        """
+        Validate configuration using Pydantic models
+
+        Args:
+            config: Configuration dictionary
+
+        Returns:
+            Tuple of (is_valid, result) where result is either DeploymentConfiguration or list of errors
         """
         try:
-            # Convert to dictionary
-            data = config.model_dump(exclude_none=True)
-
-            # Ensure directory exists
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if format == "yaml":
-                with open(file_path, 'w') as f:
-                    yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-            elif format == "json":
-                with open(file_path, 'w') as f:
-                    json.dump(data, f, indent=2)
-            else:
-                raise ConfigError(f"Unsupported format: {format}")
-
+            deployment_config = DeploymentConfiguration(**config)
+            return True, deployment_config
         except Exception as e:
-            raise ConfigError(f"Failed to save configuration: {e}")
+            # Parse pydantic validation errors
+            errors = []
+            if hasattr(e, 'errors'):
+                for error in e.errors():
+                    loc = " -> ".join(str(l) for l in error['loc'])
+                    errors.append(f"At '{loc}': {error['msg']}")
+            else:
+                errors.append(str(e))
+            return False, errors
 
-
-class ConfigValidator:
-    """Validate configuration for deployment readiness."""
-
-    def __init__(self):
-        """Initialize validator."""
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
-
-    def validate(self, config: Config) -> bool:
-        """Validate configuration for deployment.
+    def load_environment_variables(self, config: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Extract environment variables from configuration
 
         Args:
-            config: Configuration to validate
+            config: Configuration dictionary
 
         Returns:
-            True if valid, False otherwise
+            Dictionary of environment variables
         """
-        self.errors = []
-        self.warnings = []
+        env_vars = {}
 
-        # Validate deployment type specific requirements
-        self._validate_deployment(config)
+        # Get direct environment variables
+        if "environment" in config and "variables" in config["environment"]:
+            env_vars.update(config["environment"]["variables"])
 
-        # Validate service configurations
-        self._validate_services(config)
+        # Extract service-specific environment variables
+        services = config.get("services", {})
+        for service_name, service_config in services.items():
+            if isinstance(service_config, dict) and "environment" in service_config:
+                for key, value in service_config["environment"].items():
+                    # Prefix with service name to avoid conflicts
+                    env_key = f"{service_name.upper()}_{key}"
+                    env_vars[env_key] = value
 
-        # Validate infrastructure
-        self._validate_infrastructure(config)
+        # Map common configuration to environment variables
+        mappings = self._get_env_mappings(config)
+        env_vars.update(mappings)
 
-        # Check for security issues
-        self._validate_security(config)
+        return env_vars
 
-        return len(self.errors) == 0
+    def _get_env_mappings(self, config: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Map configuration values to standard environment variables
 
-    def _validate_deployment(self, config: Config) -> None:
-        """Validate deployment configuration."""
-        deployment = config.deployment
-
-        if deployment.type == "aws":
-            if not config.infrastructure.aws:
-                self.errors.append("AWS infrastructure configuration required for AWS deployment")
-            elif not config.infrastructure.aws.region:
-                self.errors.append("AWS region is required")
-
-        elif deployment.type == "docker-compose":
-            if not config.infrastructure.docker:
-                self.errors.append("Docker configuration required for Docker Compose deployment")
-
-        elif deployment.type == "local-gpu":
-            if not config.infrastructure.local_gpu:
-                self.errors.append("Local GPU configuration required for local GPU deployment")
-
-    def _validate_services(self, config: Config) -> None:
-        """Validate service configurations."""
-        # LLM validation
-        llm = config.services.llm
-        if llm.provider in ["openai", "openrouter", "azure"] and not llm.api_key:
-            if not llm.api_key or llm.api_key == "${LLM_API_KEY}":
-                self.warnings.append(f"API key not set for {llm.provider} provider")
-
-        if llm.provider == "local-mlx" and not llm.mlx_model_path:
-            self.warnings.append("Model path not specified for local MLX")
-
-        # Embedding validation
-        emb = config.services.embedding
-        if emb.provider == "openai" and not emb.api_key:
-            if not emb.api_key or emb.api_key == "${EMBEDDING_API_KEY}":
-                self.warnings.append("API key not set for OpenAI embeddings")
-
-        # Database validation
-        db = config.services.database
-        if db.type != "sqlite" and not db.password:
-            self.warnings.append("Database password not set")
-
-    def _validate_infrastructure(self, config: Config) -> None:
-        """Validate infrastructure configuration."""
-        if config.deployment.type == "local-gpu" and config.infrastructure.local_gpu:
-            gpu = config.infrastructure.local_gpu
-            if gpu.gpu_type == "nvidia" and not gpu.cuda_version:
-                self.warnings.append("CUDA version not specified for NVIDIA GPU")
-            elif gpu.gpu_type == "apple_silicon" and not gpu.mlx_enabled:
-                self.warnings.append("MLX not enabled for Apple Silicon")
-
-    def _validate_security(self, config: Config) -> None:
-        """Check for security issues."""
-        # Check for hardcoded credentials
-        if config.services.llm.api_key and not config.services.llm.api_key.startswith("${"):
-            self.warnings.append("API key appears to be hardcoded - use environment variables")
-
-        # Check for insecure defaults
-        if config.deployment.environment == "production":
-            if not config.application.main_app.jwt_enabled:
-                self.errors.append("JWT authentication must be enabled in production")
-
-            if config.monitoring and config.monitoring.grafana:
-                if config.monitoring.grafana.admin_password == "admin":
-                    self.warnings.append("Default Grafana admin password in use")
-
-    def get_report(self) -> str:
-        """Get validation report.
+        Args:
+            config: Configuration dictionary
 
         Returns:
-            Formatted validation report
+            Dictionary of environment variable mappings
         """
-        report = []
+        mappings = {}
+        services = config.get("services", {})
 
-        if self.errors:
-            report.append("❌ ERRORS:")
-            for error in self.errors:
-                report.append(f"  - {error}")
+        # LLM service mappings
+        if "llm" in services:
+            llm = services["llm"]
+            if "provider" in llm:
+                mappings["LLM_PROVIDER"] = llm["provider"]
+            if "model" in llm:
+                mappings["LLM_MODEL"] = llm["model"]
+            if "api_key" in llm:
+                mappings["LLM_API_KEY"] = llm["api_key"]
+            if "base_url" in llm:
+                mappings["LLM_BASE_URL"] = llm["base_url"]
 
-        if self.warnings:
-            if report:
-                report.append("")
-            report.append("⚠️  WARNINGS:")
-            for warning in self.warnings:
-                report.append(f"  - {warning}")
+        # Database service mappings
+        if "database" in services:
+            db = services["database"]
+            if "connection" in db:
+                conn = db["connection"]
+                db_url = f"{db['provider']}://"
+                if "username" in conn and "password" in conn:
+                    db_url += f"{conn['username']}:{conn['password']}@"
+                if "host" in conn:
+                    db_url += conn["host"]
+                if "port" in conn:
+                    db_url += f":{conn['port']}"
+                if "database" in conn:
+                    db_url += f"/{conn['database']}"
+                mappings["DATABASE_URL"] = db_url
 
-        if not self.errors and not self.warnings:
-            report.append("✅ Configuration is valid")
+        # Vector store mappings
+        if "vector_store" in services:
+            vs = services["vector_store"]
+            if "provider" in vs:
+                mappings["VECTOR_STORE_TYPE"] = vs["provider"]
+            if "connection" in vs:
+                if "host" in vs["connection"]:
+                    mappings["VECTOR_STORE_HOST"] = vs["connection"]["host"]
+                if "port" in vs["connection"]:
+                    mappings["VECTOR_STORE_PORT"] = str(vs["connection"]["port"])
 
-        return "\n".join(report)
+        # Cache service mappings
+        if "cache" in services:
+            cache = services["cache"]
+            if cache.get("provider") == "redis" and "connection" in cache:
+                conn = cache["connection"]
+                redis_url = "redis://"
+                if "password" in conn:
+                    redis_url += f":{conn['password']}@"
+                if "host" in conn:
+                    redis_url += conn["host"]
+                if "port" in conn:
+                    redis_url += f":{conn['port']}"
+                if "db" in conn:
+                    redis_url += f"/{conn['db']}"
+                else:
+                    redis_url += "/0"
+                mappings["REDIS_URL"] = redis_url
+
+        # Deployment environment
+        if "deployment" in config:
+            if "environment" in config["deployment"]:
+                mappings["DEPLOYMENT_ENV"] = config["deployment"]["environment"]
+            if "name" in config["deployment"]:
+                mappings["DEPLOYMENT_NAME"] = config["deployment"]["name"]
+
+        return mappings
+
+    def save_user_config(self, name: str, config: Dict[str, Any]) -> Path:
+        """
+        Save user configuration
+
+        Args:
+            name: Configuration name
+            config: Configuration dictionary
+
+        Returns:
+            Path to saved configuration file
+        """
+        file_path = self.user_path / f"{name}.yaml"
+        self.save_yaml(config, file_path)
+        return file_path
+
+    def load_user_config(self, name: str) -> Dict[str, Any]:
+        """
+        Load user configuration
+
+        Args:
+            name: Configuration name
+
+        Returns:
+            Configuration dictionary
+        """
+        file_path = self.user_path / f"{name}.yaml"
+        if not file_path.exists():
+            file_path = self.user_path / f"{name}.yml"
+            if not file_path.exists():
+                raise FileNotFoundError(f"User configuration not found: {name}")
+
+        return self.load_yaml(file_path)
