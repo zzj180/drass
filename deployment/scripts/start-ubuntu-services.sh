@@ -830,6 +830,14 @@ EOF
         }
     fi
 
+    # Install passlib which is required by security module
+    if ! python3 -c "import passlib" 2>/dev/null; then
+        echo -e "${YELLOW}Installing passlib for password hashing...${NC}"
+        pip3 install passlib[bcrypt] --no-cache-dir || {
+            pip3 install --user passlib[bcrypt] --no-cache-dir
+        }
+    fi
+
     # Install additional dependencies that might be needed
     echo -e "${BLUE}Checking additional backend dependencies...${NC}"
     DEPS_TO_CHECK=("psycopg2" "redis" "httpx" "aiofiles")
@@ -851,8 +859,41 @@ EOF
         # Install additional dependencies if requirements.txt exists
         if [ -f "requirements.txt" ]; then
             echo -e "${BLUE}Installing backend requirements...${NC}"
+
+            # Install critical dependencies first
+            echo -e "${BLUE}Installing critical dependencies...${NC}"
+            CRITICAL_DEPS=(
+                "passlib[bcrypt]"
+                "python-jose[cryptography]"
+                "python-multipart"
+                "python-dotenv"
+                "pydantic"
+                "fastapi"
+                "uvicorn[standard]"
+                "sqlalchemy"
+                "asyncpg"
+                "psycopg2-binary"
+                "redis"
+                "httpx"
+                "aiofiles"
+                "langchain"
+                "langchain-community"
+                "langchain-openai"
+                "openai"
+                "chromadb"
+            )
+
+            for dep in "${CRITICAL_DEPS[@]}"; do
+                echo -e "${BLUE}Installing $dep...${NC}"
+                pip3 install "$dep" --no-cache-dir 2>/dev/null || {
+                    echo -e "${YELLOW}Failed to install $dep system-wide, trying user install...${NC}"
+                    pip3 install --user "$dep" --no-cache-dir 2>/dev/null || true
+                }
+            done
+
+            # Then try to install all requirements
             pip3 install -r requirements.txt --no-cache-dir 2>/dev/null || {
-                echo -e "${YELLOW}Some requirements failed to install, continuing...${NC}"
+                echo -e "${YELLOW}Some requirements failed to install, continuing with critical deps...${NC}"
             }
         fi
 
