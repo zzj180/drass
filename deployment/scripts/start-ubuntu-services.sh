@@ -994,12 +994,14 @@ EOF
             # Try with production startup script if available
             API_START_ATTEMPTED=true
 
-            if [ -f "$BASE_DIR/services/main-app/start_production.py" ]; then
-                echo -e "${BLUE}Using production startup script${NC}"
-                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 python3 start_production.py" "$LOG_DIR/drass-api.log" 8888
+            # Use the cleanest startup method available
+            if [ -f "$BASE_DIR/services/main-app/run_api.sh" ]; then
+                echo -e "${BLUE}Using run_api.sh startup script${NC}"
+                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 bash run_api.sh" "$LOG_DIR/drass-api.log" 8888
             else
-                echo -e "${BLUE}Using uvicorn direct startup${NC}"
-                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+                echo -e "${BLUE}Using direct Python startup${NC}"
+                # Use explicit Python path to avoid venv issues
+                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset PYTHONPATH PYTHONHOME; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
             fi
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
