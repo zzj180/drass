@@ -210,7 +210,8 @@ services/embedding-service/models/
 services/embedding-service/venv/
 services/embedding-service/.env
 mlx_qwen3_converted/
-models/
+# Only ignore top-level models directory, not app/models
+/models/
 local_model_qwen3/
 .env.qwen3-mlx
 *.DS_Store
