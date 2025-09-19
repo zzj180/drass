@@ -1,0 +1,169 @@
+"""
+OpenAI-compatible Provider implementation (works with vLLM, LM Studio, MLX, etc.)
+"""
+
+import logging
+import time
+from typing import Optional, List, Dict, Any, AsyncGenerator
+import httpx
+import json
+
+from .base import BaseLLMProvider, LLMResponse, TokenUsage
+
+logger = logging.getLogger(__name__)
+
+
+class OpenAICompatibleProvider(BaseLLMProvider):
+    """OpenAI-compatible API provider for vLLM and other OpenAI-compatible services"""
+
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.base_url = config.get("base_url", "http://localhost:8001/v1")
+        self.model_name = config.get("model_name", "vllm")
+        self.api_key = config.get("api_key", "123456")
+        self.client = None
+
+    async def initialize(self):
+        """Initialize OpenAI-compatible provider"""
+        self.client = httpx.AsyncClient(
+            base_url=self.base_url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            },
+            timeout=120.0  # Longer timeout for local models
+        )
+
+        # Test connection by listing models
+        try:
+            logger.info(f"Testing OpenAI-compatible endpoint: {self.base_url}/models")
+            response = await self.client.get("/models")
+            if response.status_code == 200:
+                self._initialized = True
+                models_data = response.json()
+                available_models = [m.get('id', 'unknown') for m in models_data.get('data', [])]
+                logger.info(f"OpenAI-compatible provider initialized at {self.base_url}")
+                logger.info(f"Available models: {available_models}")
+            else:
+                # Some services might not have /models endpoint, try a completion
+                logger.info("Models endpoint not available, trying test completion")
+                test_response = await self.client.post(
+                    "/completions",
+                    json={
+                        "model": self.model_name,
+                        "prompt": "Hello",
+                        "max_tokens": 1,
+                        "temperature": 0
+                    }
+                )
+                if test_response.status_code in [200, 201]:
+                    self._initialized = True
+                    logger.info(f"OpenAI-compatible provider initialized at {self.base_url}")
+                else:
+                    raise Exception(f"Service not responding properly: {test_response.status_code}")
+        except httpx.ConnectError as e:
+            logger.warning(f"Service not available at {self.base_url}: {e}")
+            raise Exception(f"Cannot connect to OpenAI-compatible service at {self.base_url}")
+        except Exception as e:
+            logger.warning(f"Failed to connect to service: {e}")
+            # Don't fail completely - service might still work
+            self._initialized = True
+            logger.info(f"OpenAI-compatible provider initialized (with warnings) at {self.base_url}")
+
+    async def generate(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        stream: bool = False,
+        **kwargs
+    ) -> LLMResponse:
+        """Generate response using OpenAI-compatible API"""
+        if not self._initialized:
+            raise Exception("Provider not initialized")
+
+        start_time = time.time()
+
+        # Prepare request
+        request_data = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": temperature or self.config.get("temperature", 0.7),
+            "max_tokens": max_tokens or self.config.get("max_tokens", 2048),
+            **kwargs
+        }
+
+        if stream:
+            return await self._generate_stream(request_data, start_time)
+
+        try:
+            response = await self.client.post("/chat/completions", json=request_data)
+            response.raise_for_status()
+
+            data = response.json()
+            choice = data["choices"][0]
+
+            # Extract token usage
+            usage = data.get("usage", {})
+            token_usage = TokenUsage(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                total_tokens=usage.get("total_tokens", 0)
+            )
+
+            return LLMResponse(
+                content=choice["message"]["content"],
+                model=data.get("model", self.model_name),
+                provider="openai_compatible",
+                latency=time.time() - start_time,
+                token_usage=token_usage,
+                raw_response=data
+            )
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error during generation: {e}")
+            raise Exception(f"Failed to generate response: {e}")
+        except Exception as e:
+            logger.error(f"Error during generation: {e}")
+            raise
+
+    async def _generate_stream(
+        self, request_data: Dict[str, Any], start_time: float
+    ) -> AsyncGenerator[str, None]:
+        """Generate streaming response"""
+        request_data["stream"] = True
+
+        try:
+            async with self.client.stream(
+                "POST",
+                "/chat/completions",
+                json=request_data
+            ) as response:
+                response.raise_for_status()
+
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        chunk_data = line[6:]
+                        if chunk_data == "[DONE]":
+                            break
+
+                        try:
+                            chunk = json.loads(chunk_data)
+                            if chunk["choices"][0].get("delta", {}).get("content"):
+                                yield chunk["choices"][0]["delta"]["content"]
+                        except json.JSONDecodeError:
+                            continue
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error during streaming: {e}")
+            raise Exception(f"Failed to generate streaming response: {e}")
+        except Exception as e:
+            logger.error(f"Error during streaming: {e}")
+            raise
+
+    async def close(self):
+        """Close HTTP client"""
+        if self.client:
+            await self.client.aclose()
+            self.client = None
+            self._initialized = False

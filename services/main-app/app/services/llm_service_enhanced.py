@@ -17,7 +17,8 @@ from .providers import (
     BaseLLMProvider,
     OpenRouterProvider,
     LocalMLXProvider,
-    LMStudioProvider
+    LMStudioProvider,
+    OpenAICompatibleProvider
 )
 from .providers.base import LLMResponse, TokenUsage
 
@@ -29,6 +30,7 @@ class LLMProvider(Enum):
     OPENROUTER = "openrouter"
     LOCAL_MLX = "local_mlx"
     LMSTUDIO = "lmstudio"
+    OPENAI_COMPATIBLE = "openai_compatible"
     AUTO = "auto"  # Automatic selection based on availability
 
 
@@ -126,33 +128,59 @@ class UnifiedLLMService:
     
     async def _initialize_providers(self):
         """Initialize all configured providers"""
-        # OpenRouter provider
-        if hasattr(settings, 'OPENROUTER_API_KEY') and settings.OPENROUTER_API_KEY:
+
+        # Check LLM_PROVIDER setting to determine primary provider
+        llm_provider = getattr(settings, 'LLM_PROVIDER', 'auto').lower()
+        logger.info(f"LLM_PROVIDER setting: {llm_provider}")
+
+        # OpenAI-compatible provider (for vLLM, etc.) - prioritize if LLM_PROVIDER is "openai"
+        if llm_provider == 'openai' or llm_provider == 'vllm':
             try:
-                provider = OpenRouterProvider({
-                    "api_key": settings.OPENROUTER_API_KEY,
-                    "default_model": getattr(settings, 'OPENROUTER_MODEL', 'meta-llama/llama-3-8b-instruct'),
-                    "site_url": getattr(settings, 'SITE_URL', 'https://drass.ai'),
-                    "site_name": getattr(settings, 'SITE_NAME', 'Drass Compliance Assistant')
-                })
+                openai_config = {
+                    "base_url": getattr(settings, 'LLM_BASE_URL', 'http://localhost:8001/v1'),
+                    "api_key": getattr(settings, 'LLM_API_KEY', '123456'),
+                    "model_name": getattr(settings, 'LLM_MODEL', 'vllm')
+                }
+                logger.info(f"Initializing OpenAI-compatible provider with base_url: {openai_config['base_url']}")
+                provider = OpenAICompatibleProvider(openai_config)
                 await provider.initialize()
-                self.providers[LLMProvider.OPENROUTER.value] = provider
-                logger.info("OpenRouter provider initialized")
+                self.providers[LLMProvider.OPENAI_COMPATIBLE.value] = provider
+                logger.info("OpenAI-compatible provider initialized (vLLM)")
             except Exception as e:
-                logger.warning(f"Failed to initialize OpenRouter provider: {e}")
-        
-        # Local MLX provider
-        try:
-            mlx_config = {
-                "base_url": getattr(settings, 'LLM_BASE_URL', 'http://localhost:8001/v1'),
-                "model_name": getattr(settings, 'LLM_MODEL', 'qwen3-8b-mlx')
-            }
-            provider = LocalMLXProvider(mlx_config)
-            await provider.initialize()
-            self.providers[LLMProvider.LOCAL_MLX.value] = provider
-            logger.info("Local MLX provider initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Local MLX provider: {e}")
+                logger.error(f"Failed to initialize OpenAI-compatible provider: {e}")
+                raise
+
+        # OpenRouter provider - only if not using OpenAI/vLLM exclusively
+        if llm_provider != 'openai' and llm_provider != 'vllm':
+            if hasattr(settings, 'OPENROUTER_API_KEY') and settings.OPENROUTER_API_KEY:
+                try:
+                    provider = OpenRouterProvider({
+                        "api_key": settings.OPENROUTER_API_KEY,
+                        "default_model": getattr(settings, 'OPENROUTER_MODEL', 'meta-llama/llama-3-8b-instruct'),
+                        "site_url": getattr(settings, 'SITE_URL', 'https://drass.ai'),
+                        "site_name": getattr(settings, 'SITE_NAME', 'Drass Compliance Assistant')
+                    })
+                    await provider.initialize()
+                    self.providers[LLMProvider.OPENROUTER.value] = provider
+                    logger.info("OpenRouter provider initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize OpenRouter provider: {e}")
+
+        # Local MLX provider - only if explicitly using MLX or auto mode
+        if llm_provider == 'mlx' or (llm_provider == 'auto' and getattr(settings, 'MLX_ENABLED', 'false').lower() == 'true'):
+            try:
+                mlx_config = {
+                    "base_url": getattr(settings, 'LLM_BASE_URL', 'http://localhost:8001/v1'),
+                    "model_name": getattr(settings, 'LLM_MODEL', 'qwen3-8b-mlx')
+                }
+                provider = LocalMLXProvider(mlx_config)
+                await provider.initialize()
+                self.providers[LLMProvider.LOCAL_MLX.value] = provider
+                logger.info("Local MLX provider initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Local MLX provider: {e}")
+        else:
+            logger.info("MLX provider skipped (not needed for current configuration)")
         
         # LM Studio provider
         if hasattr(settings, 'LMSTUDIO_ENABLED') and settings.LMSTUDIO_ENABLED:
@@ -173,17 +201,37 @@ class UnifiedLLMService:
     
     def _set_provider_priority(self):
         """Set primary and fallback providers based on configuration and availability"""
-        provider_priority = [
-            LLMProvider.LOCAL_MLX.value,
-            LLMProvider.LMSTUDIO.value,
-            LLMProvider.OPENROUTER.value
-        ]
-        
-        # Override with configured provider
-        if hasattr(settings, 'LLM_PROVIDER'):
-            configured_provider = settings.LLM_PROVIDER.lower()
-            if configured_provider in [p.value for p in LLMProvider if p != LLMProvider.AUTO]:
-                provider_priority.insert(0, configured_provider)
+        # Check configured provider
+        configured_provider = getattr(settings, 'LLM_PROVIDER', 'auto').lower()
+
+        # Map 'openai' or 'vllm' to our OpenAI-compatible provider
+        if configured_provider in ['openai', 'vllm']:
+            configured_provider = LLMProvider.OPENAI_COMPATIBLE.value
+        elif configured_provider == 'mlx':
+            configured_provider = LLMProvider.LOCAL_MLX.value
+
+        # Default priority order
+        provider_priority = []
+
+        # Add configured provider first if specified and available
+        if configured_provider != 'auto':
+            if configured_provider == LLMProvider.OPENAI_COMPATIBLE.value and configured_provider in self.providers:
+                provider_priority = [configured_provider]  # Only use OpenAI-compatible, no fallbacks
+            elif configured_provider in [p.value for p in LLMProvider if p != LLMProvider.AUTO] and configured_provider in self.providers:
+                provider_priority.append(configured_provider)
+
+        # Add other providers as fallbacks only if not exclusively using OpenAI/vLLM
+        if configured_provider not in [LLMProvider.OPENAI_COMPATIBLE.value]:
+            fallback_order = [
+                LLMProvider.OPENAI_COMPATIBLE.value,
+                LLMProvider.LOCAL_MLX.value,
+                LLMProvider.LMSTUDIO.value,
+                LLMProvider.OPENROUTER.value
+            ]
+
+            for provider in fallback_order:
+                if provider not in provider_priority:
+                    provider_priority.append(provider)
         
         # Set primary and fallback providers
         for provider_name in provider_priority:

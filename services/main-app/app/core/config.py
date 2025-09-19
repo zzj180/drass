@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     LMSTUDIO_HOST: str = Field(default="localhost", env="LMSTUDIO_HOST")
     LMSTUDIO_PORT: int = Field(default=1234, env="LMSTUDIO_PORT")
     USE_MLX: bool = Field(default=True, env="USE_MLX")  # MLX optimization for Apple Silicon
+    MLX_ENABLED: bool = Field(default=False, env="MLX_ENABLED")  # Enable MLX provider
     MODEL_PRECISION: str = Field(default="bfloat16", env="MODEL_PRECISION")  # bf16 precision
     
     # OpenRouter specific (kept as alternative)
