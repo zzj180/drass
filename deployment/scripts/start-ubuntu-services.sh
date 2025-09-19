@@ -50,6 +50,26 @@ start_service() {
 
 # Function to create minimal API
 create_minimal_api() {
+    # First create a startup script that handles proxy settings
+    cat > "$BASE_DIR/services/main-app/start_api.sh" << 'SCRIPT_EOF'
+#!/bin/bash
+# Clear proxy settings that might interfere with local services
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+unset all_proxy
+unset ALL_PROXY
+
+# Set NO_PROXY for localhost
+export NO_PROXY="localhost,127.0.0.1,::1,0.0.0.0"
+
+# Start the API
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+SCRIPT_EOF
+
+    chmod +x "$BASE_DIR/services/main-app/start_api.sh"
+
     cat > "$BASE_DIR/services/main-app/app/main.py" << 'EOF'
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -186,8 +206,8 @@ EOF
 
     echo -e "${GREEN}✓${NC} Created minimal API at $BASE_DIR/services/main-app/app/main.py"
 
-    # Start the minimal API
-    start_service "Drass API" "cd $BASE_DIR/services/main-app && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000" "$LOG_DIR/drass-api.log"
+    # Start the minimal API using the startup script
+    start_service "Drass API" "cd $BASE_DIR/services/main-app && bash start_api.sh" "$LOG_DIR/drass-api.log"
 }
 
 # Function to create simple API server
@@ -536,8 +556,21 @@ if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
         # Check if app/main.py exists
         if [ -f "app/main.py" ]; then
             echo -e "${BLUE}Starting Drass API from existing application...${NC}"
-            # Try with different worker counts
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
+
+            # Clear proxy settings that might interfere with the API
+            echo -e "${BLUE}Clearing proxy settings for API...${NC}"
+            unset http_proxy
+            unset https_proxy
+            unset HTTP_PROXY
+            unset HTTPS_PROXY
+            unset all_proxy
+            unset ALL_PROXY
+
+            # Export NO_PROXY for localhost connections
+            export NO_PROXY="localhost,127.0.0.1,::1"
+
+            # Try with different worker counts and without proxy
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server
