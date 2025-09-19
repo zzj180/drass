@@ -757,18 +757,43 @@ fi
 # Start Drass backend API
 echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
 
+# Flag to track if we've attempted to start the API
+API_START_ATTEMPTED=false
+
 # First, clean up any stale processes on port 8888
 if lsof -i :8888 >/dev/null 2>&1; then
-    echo -e "${YELLOW}Port 8888 is in use, cleaning up old processes...${NC}"
-    # Try graceful kill first
-    lsof -ti :8888 | xargs -r kill 2>/dev/null
-    sleep 2
-    # Force kill if still running
-    if lsof -i :8888 >/dev/null 2>&1; then
-        lsof -ti :8888 | xargs -r kill -9 2>/dev/null
-        sleep 1
+    echo -e "${YELLOW}Port 8888 is in use, checking what's using it...${NC}"
+    echo "Current processes on port 8888:"
+    lsof -i :8888 || true
+
+    # Get PIDs and kill them
+    PIDS=$(lsof -ti :8888 2>/dev/null || true)
+    if [ -n "$PIDS" ]; then
+        echo -e "${BLUE}Killing PIDs: $PIDS${NC}"
+        # Try graceful kill first
+        for pid in $PIDS; do
+            kill $pid 2>/dev/null || true
+        done
+        sleep 3
+
+        # Force kill if still running
+        PIDS=$(lsof -ti :8888 2>/dev/null || true)
+        if [ -n "$PIDS" ]; then
+            echo -e "${YELLOW}Force killing remaining PIDs: $PIDS${NC}"
+            for pid in $PIDS; do
+                kill -9 $pid 2>/dev/null || true
+            done
+            sleep 1
+        fi
     fi
-    echo -e "${GREEN}✓${NC} Port 8888 cleaned up"
+
+    # Final check
+    if lsof -i :8888 >/dev/null 2>&1; then
+        echo -e "${RED}WARNING: Port 8888 is still in use!${NC}"
+        lsof -i :8888 || true
+    else
+        echo -e "${GREEN}✓${NC} Port 8888 successfully cleaned up"
+    fi
 fi
 
 if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
@@ -959,6 +984,7 @@ EOF
             export RERANKING_API_KEY="123456"
 
             # Try with different worker counts and without proxy
+            API_START_ATTEMPTED=true
             start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
@@ -973,22 +999,36 @@ EOF
         create_minimal_api
     fi
 
-    # Wait and check if API started
-    sleep 5
-    if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
-        echo -e "${YELLOW}API failed to start, checking logs...${NC}"
-        if [ -f "$LOG_DIR/drass-api.log" ]; then
-            echo -e "${YELLOW}Last 20 lines of API log:${NC}"
-            tail -20 "$LOG_DIR/drass-api.log"
+    # Wait and check if API started (only if we attempted to start it)
+    if [ "$API_START_ATTEMPTED" = true ]; then
+        sleep 5
+        if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
+            echo -e "${YELLOW}API failed to start, checking logs...${NC}"
+            if [ -f "$LOG_DIR/drass-api.log" ]; then
+                echo -e "${YELLOW}Checking for errors in API log:${NC}"
+                tail -50 "$LOG_DIR/drass-api.log" | grep -E "ERROR.*address already in use" && {
+                    echo -e "${RED}Port 8888 was already in use when API tried to start!${NC}"
+                    echo -e "${YELLOW}There might be a duplicate API process or another service on port 8888.${NC}"
+                    echo -e "${BLUE}Current processes on port 8888:${NC}"
+                    lsof -i :8888 2>/dev/null || echo "Port appears free now"
+                } || {
+                    tail -20 "$LOG_DIR/drass-api.log" | grep -E "ERROR|WARN|Failed" || tail -10 "$LOG_DIR/drass-api.log"
+                }
+            fi
+
+            # Check if port is actually in use by something else
+            echo -e "${BLUE}Checking what's on port 8888...${NC}"
+            if lsof -i :8888 2>/dev/null; then
+                echo -e "${RED}Port 8888 is in use!${NC}"
+                echo -e "${YELLOW}Not attempting fallback since port is occupied.${NC}"
+            else
+                echo -e "${YELLOW}Port 8888 is free, trying simple API as fallback...${NC}"
+                # Only try alternative if port is actually free
+                create_simple_api_server
+            fi
+        else
+            echo -e "${GREEN}✓${NC} Drass API is running on port 8888"
         fi
-
-        # Check if port is actually in use by something else
-        echo -e "${BLUE}Checking what's on port 8888...${NC}"
-        lsof -i :8888 2>/dev/null || echo "  Port 8888 appears to be free"
-
-        # Try alternative startup
-        echo -e "${BLUE}Trying alternative API startup...${NC}"
-        create_simple_api_server
     fi
 fi
 
