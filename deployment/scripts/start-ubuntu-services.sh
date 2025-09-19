@@ -72,21 +72,120 @@ fi
 
 # Start PostgreSQL if not running
 echo -e "\n${BLUE}Checking PostgreSQL...${NC}"
-if ! systemctl is-active --quiet postgresql; then
-    echo -e "${YELLOW}Starting PostgreSQL...${NC}"
-    sudo systemctl start postgresql
-    sudo systemctl enable postgresql
+
+# Check if PostgreSQL is installed
+if ! command -v psql >/dev/null 2>&1; then
+    echo -e "${YELLOW}PostgreSQL is not installed. Installing...${NC}"
+    sudo apt-get update
+    sudo apt-get install -y postgresql postgresql-contrib
+
+    # Wait for installation to complete
+    sleep 5
 fi
-echo -e "${GREEN}✓${NC} PostgreSQL is running"
+
+# Find the correct PostgreSQL service name (could be postgresql or postgresql@14-main etc.)
+PG_SERVICE=$(systemctl list-units --type=service --state=running,exited | grep -E "postgresql(@[0-9]+-main)?\.service" | awk '{print $1}' | head -1)
+
+if [ -z "$PG_SERVICE" ]; then
+    # Try common service names
+    for service in postgresql postgresql@14-main postgresql@15-main postgresql-14 postgresql-15; do
+        if systemctl list-unit-files | grep -q "^${service}.service"; then
+            PG_SERVICE="${service}.service"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PG_SERVICE" ]; then
+    echo -e "${RED}Cannot find PostgreSQL service. Please install PostgreSQL manually:${NC}"
+    echo -e "  sudo apt-get update"
+    echo -e "  sudo apt-get install -y postgresql postgresql-contrib"
+    echo -e "  sudo systemctl start postgresql"
+    echo -e "${YELLOW}Continuing without PostgreSQL...${NC}"
+else
+    # Check if PostgreSQL is running
+    if ! systemctl is-active --quiet "$PG_SERVICE"; then
+        echo -e "${YELLOW}Starting PostgreSQL service: $PG_SERVICE...${NC}"
+        sudo systemctl start "$PG_SERVICE"
+        sudo systemctl enable "$PG_SERVICE"
+    fi
+
+    # Verify PostgreSQL is accessible
+    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} PostgreSQL is running and accessible"
+
+        # Create database and user if they don't exist
+        echo -e "${BLUE}Setting up database...${NC}"
+        sudo -u postgres psql <<EOF 2>/dev/null || true
+-- Create user if not exists
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'drass_user') THEN
+        CREATE USER drass_user WITH PASSWORD 'drass_password';
+    END IF;
+END
+\$\$;
+
+-- Create database if not exists
+SELECT 'CREATE DATABASE drass_production OWNER drass_user'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'drass_production')\\gexec
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE drass_production TO drass_user;
+EOF
+        echo -e "${GREEN}✓${NC} Database setup completed"
+    else
+        echo -e "${YELLOW}PostgreSQL is running but not accessible. Check your PostgreSQL configuration.${NC}"
+    fi
+fi
 
 # Start Redis if not running
 echo -e "\n${BLUE}Checking Redis...${NC}"
-if ! systemctl is-active --quiet redis-server; then
-    echo -e "${YELLOW}Starting Redis...${NC}"
-    sudo systemctl start redis-server
-    sudo systemctl enable redis-server
+
+# Check if Redis is installed
+if ! command -v redis-cli >/dev/null 2>&1; then
+    echo -e "${YELLOW}Redis is not installed. Installing...${NC}"
+    sudo apt-get update
+    sudo apt-get install -y redis-server
+
+    # Wait for installation to complete
+    sleep 3
 fi
-echo -e "${GREEN}✓${NC} Redis is running"
+
+# Find the correct Redis service name
+REDIS_SERVICE=$(systemctl list-units --type=service | grep -E "redis(-server)?\.service" | awk '{print $1}' | head -1)
+
+if [ -z "$REDIS_SERVICE" ]; then
+    # Try common service names
+    for service in redis-server redis redis-service; do
+        if systemctl list-unit-files | grep -q "^${service}.service"; then
+            REDIS_SERVICE="${service}.service"
+            break
+        fi
+    done
+fi
+
+if [ -z "$REDIS_SERVICE" ]; then
+    echo -e "${RED}Cannot find Redis service. Please install Redis manually:${NC}"
+    echo -e "  sudo apt-get update"
+    echo -e "  sudo apt-get install -y redis-server"
+    echo -e "  sudo systemctl start redis-server"
+    echo -e "${YELLOW}Continuing without Redis...${NC}"
+else
+    # Check if Redis is running
+    if ! systemctl is-active --quiet "$REDIS_SERVICE"; then
+        echo -e "${YELLOW}Starting Redis service: $REDIS_SERVICE...${NC}"
+        sudo systemctl start "$REDIS_SERVICE"
+        sudo systemctl enable "$REDIS_SERVICE"
+    fi
+
+    # Verify Redis is accessible
+    if redis-cli ping >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} Redis is running and accessible"
+    else
+        echo -e "${YELLOW}Redis is running but not accessible. Check your Redis configuration.${NC}"
+    fi
+fi
 
 # Start ChromaDB
 echo -e "\n${BLUE}Starting ChromaDB...${NC}"
