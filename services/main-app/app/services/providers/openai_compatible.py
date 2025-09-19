@@ -8,6 +8,12 @@ from typing import Optional, List, Dict, Any, AsyncGenerator
 import httpx
 import json
 
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+
 from .base import BaseLLMProvider, LLMResponse, TokenUsage
 
 logger = logging.getLogger(__name__)
@@ -160,6 +166,101 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f"Error during streaming: {e}")
             raise
+
+    async def stream_generate(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """Stream generation from messages"""
+        request_data = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": temperature or self.config.get("temperature", 0.7),
+            "max_tokens": max_tokens or self.config.get("max_tokens", 2048),
+            "stream": True,
+            **kwargs
+        }
+
+        async for chunk in self._generate_stream(request_data, time.time()):
+            yield chunk
+
+    async def embed(
+        self,
+        texts: List[str],
+        model: Optional[str] = None
+    ) -> List[List[float]]:
+        """Generate embeddings for texts"""
+        # Most vLLM deployments don't include embedding models
+        # This is a placeholder that should be overridden if needed
+        raise NotImplementedError("Embedding not supported by this OpenAI-compatible provider")
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Check provider health"""
+        try:
+            # Try models endpoint first
+            response = await self.client.get("/models")
+            if response.status_code == 200:
+                return {
+                    "status": "healthy",
+                    "provider": "openai_compatible",
+                    "base_url": self.base_url,
+                    "model": self.model_name
+                }
+
+            # Fallback to a test completion
+            test_response = await self.client.post(
+                "/chat/completions",
+                json={
+                    "model": self.model_name,
+                    "messages": [{"role": "user", "content": "test"}],
+                    "max_tokens": 1,
+                    "temperature": 0
+                }
+            )
+
+            if test_response.status_code == 200:
+                return {
+                    "status": "healthy",
+                    "provider": "openai_compatible",
+                    "base_url": self.base_url,
+                    "model": self.model_name
+                }
+            else:
+                return {
+                    "status": "unhealthy",
+                    "provider": "openai_compatible",
+                    "error": f"Status code: {test_response.status_code}"
+                }
+
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "provider": "openai_compatible",
+                "error": str(e)
+            }
+
+    def count_tokens(self, text: str) -> int:
+        """Count tokens in text"""
+        if TIKTOKEN_AVAILABLE:
+            # Try to use tiktoken for token counting
+            try:
+                # Try to get encoding for the model
+                if "gpt" in self.model_name.lower():
+                    encoding = tiktoken.encoding_for_model(self.model_name)
+                else:
+                    # Default to cl100k_base for non-GPT models
+                    encoding = tiktoken.get_encoding("cl100k_base")
+
+                return len(encoding.encode(text))
+            except Exception:
+                pass
+
+        # Fallback to simple word-based estimation
+        # Roughly 1 token per 4 characters
+        return len(text) // 4
 
     async def close(self):
         """Close HTTP client"""
