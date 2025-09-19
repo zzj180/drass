@@ -105,19 +105,19 @@ check_connectivity() {
 
     # Try to connect as postgres user
     echo -e "\nTesting database connection..."
-    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+    if (cd /tmp && sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1); then
         echo -e "${GREEN}✓${NC} Can connect as postgres user"
 
         # Check for drass database and user
         echo -e "\nChecking drass database..."
-        if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw drass_production; then
+        if (cd /tmp && sudo -u postgres psql -lqt) | cut -d \| -f 1 | grep -qw drass_production; then
             echo -e "${GREEN}✓${NC} Database 'drass_production' exists"
         else
             echo -e "${YELLOW}!${NC} Database 'drass_production' does not exist"
         fi
 
         # Check for drass_user
-        if sudo -u postgres psql -c "SELECT 1 FROM pg_user WHERE usename='drass_user';" | grep -q 1; then
+        if (cd /tmp && sudo -u postgres psql -c "SELECT 1 FROM pg_user WHERE usename='drass_user';") | grep -q 1; then
             echo -e "${GREEN}✓${NC} User 'drass_user' exists"
         else
             echo -e "${YELLOW}!${NC} User 'drass_user' does not exist"
@@ -132,7 +132,7 @@ check_config() {
     echo -e "\n${BLUE}Checking PostgreSQL configuration...${NC}"
 
     # Find postgresql.conf
-    PG_CONFIG=$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW config_file;' 2>/dev/null || echo "")
+    PG_CONFIG=$((cd /tmp && sudo -u postgres psql -t -P format=unaligned -c 'SHOW config_file;' 2>/dev/null) || echo "")
 
     if [ -n "$PG_CONFIG" ] && [ -f "$PG_CONFIG" ]; then
         echo -e "Configuration file: $PG_CONFIG"
@@ -149,7 +149,7 @@ check_config() {
     fi
 
     # Find pg_hba.conf
-    PG_HBA=$(sudo -u postgres psql -t -P format=unaligned -c 'SHOW hba_file;' 2>/dev/null || echo "")
+    PG_HBA=$((cd /tmp && sudo -u postgres psql -t -P format=unaligned -c 'SHOW hba_file;' 2>/dev/null) || echo "")
 
     if [ -n "$PG_HBA" ] && [ -f "$PG_HBA" ]; then
         echo -e "\nAuthentication file: $PG_HBA"
@@ -183,10 +183,10 @@ fix_postgresql() {
     sleep 3
 
     # Create database and user if needed
-    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+    if (cd /tmp && sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1); then
         echo -e "\n${BLUE}Setting up database...${NC}"
 
-        sudo -u postgres psql <<EOF 2>/dev/null || true
+        (cd /tmp && sudo -u postgres psql <<EOF 2>/dev/null) || true
 -- Create user if not exists
 DO \$\$
 BEGIN

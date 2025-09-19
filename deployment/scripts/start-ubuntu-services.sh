@@ -400,12 +400,13 @@ else
     fi
 
     # Verify PostgreSQL is accessible
-    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+    # Change to a neutral directory to avoid permission warnings
+    if (cd /tmp && sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1); then
         echo -e "${GREEN}✓${NC} PostgreSQL is running and accessible"
 
         # Create database and user if they don't exist
         echo -e "${BLUE}Setting up database...${NC}"
-        sudo -u postgres psql <<EOF 2>/dev/null || true
+        (cd /tmp && sudo -u postgres psql <<EOF 2>/dev/null) || true
 -- Create user if not exists
 DO \$\$
 BEGIN
@@ -425,7 +426,7 @@ EOF
         echo -e "${GREEN}✓${NC} Database setup completed"
 
         # Update pg_hba.conf to ensure local connections work
-        PG_VERSION=$(sudo -u postgres psql -t -c "SELECT version();" | grep -oE '[0-9]+' | head -1)
+        PG_VERSION=$((cd /tmp && sudo -u postgres psql -t -c "SELECT version();") | grep -oE '[0-9]+' | head -1)
         PG_HBA="/etc/postgresql/$PG_VERSION/main/pg_hba.conf"
 
         if [ -f "$PG_HBA" ]; then
@@ -701,11 +702,14 @@ EOF
             export NO_PROXY="localhost,127.0.0.1,::1"
 
             # Export LLM configuration to ensure it uses vLLM
+            export LLM_PROVIDER="openai"
             export LLM_BASE_URL="http://localhost:8001/v1"
             export LLM_API_KEY="123456"
             export LLM_MODEL="vllm"
             export OPENAI_API_BASE="http://localhost:8001/v1"
             export OPENAI_API_KEY="123456"
+            export MLX_ENABLED="false"
+            export LMSTUDIO_ENABLED="false"
 
             # Export Embedding configuration for vLLM embedding service
             export EMBEDDING_PROVIDER="openai"
@@ -720,7 +724,7 @@ EOF
             export RERANKING_API_KEY="123456"
 
             # Try with different worker counts and without proxy
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' OPENAI_API_BASE='http://localhost:8001/v1' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server
@@ -948,7 +952,7 @@ fi
 
 # Method 2: Check with psql if pg_isready failed
 if [ "$PG_STATUS" = "not_running" ]; then
-    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+    if (cd /tmp && sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1); then
         PG_STATUS="running"
     fi
 fi
