@@ -673,6 +673,13 @@ fi
 # Start Drass frontend
 echo -e "\n${BLUE}Starting Drass Frontend...${NC}"
 if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
+    # First check if port 5173 is blocked by something else
+    if lsof -i :5173 >/dev/null 2>&1; then
+        echo -e "${YELLOW}Port 5173 is in use, attempting to free it...${NC}"
+        lsof -ti :5173 | xargs kill -9 2>/dev/null || true
+        sleep 2
+    fi
+
     cd "$BASE_DIR/frontend"
 
     # Check if dist folder exists
@@ -715,15 +722,122 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
         # Serve the production build
         echo -e "${BLUE}Starting frontend server...${NC}"
 
-        # Install serve if not available
-        if ! command -v serve >/dev/null 2>&1; then
-            npm install -g serve
+        # Try different methods to serve the frontend
+        FRONTEND_STARTED=false
+
+        # Method 1: Try global serve
+        if command -v serve >/dev/null 2>&1; then
+            echo -e "${BLUE}Using global serve command...${NC}"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log"
+            sleep 3
+            if lsof -i :5173 >/dev/null 2>&1; then
+                FRONTEND_STARTED=true
+                echo -e "${GREEN}✓${NC} Frontend started with serve"
+            fi
         fi
 
-        start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log"
+        # Method 2: Try npx serve
+        if [ "$FRONTEND_STARTED" = false ]; then
+            echo -e "${BLUE}Trying npx serve...${NC}"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log"
+            sleep 3
+            if lsof -i :5173 >/dev/null 2>&1; then
+                FRONTEND_STARTED=true
+                echo -e "${GREEN}✓${NC} Frontend started with npx serve"
+            fi
+        fi
+
+        # Method 3: Try Python HTTP server
+        if [ "$FRONTEND_STARTED" = false ]; then
+            echo -e "${BLUE}Trying Python HTTP server...${NC}"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173" "$LOG_DIR/drass-frontend.log"
+            sleep 3
+            if lsof -i :5173 >/dev/null 2>&1; then
+                FRONTEND_STARTED=true
+                echo -e "${GREEN}✓${NC} Frontend started with Python HTTP server"
+            fi
+        fi
+
+        # Method 4: Try Node.js HTTP server
+        if [ "$FRONTEND_STARTED" = false ]; then
+            echo -e "${BLUE}Creating Node.js static server...${NC}"
+            cat > "$BASE_DIR/frontend/serve-static.js" << 'EOF'
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const PORT = 5173;
+const DIST_DIR = path.join(__dirname, 'dist');
+
+const server = http.createServer((req, res) => {
+    let filePath = path.join(DIST_DIR, req.url === '/' ? 'index.html' : req.url);
+
+    // Default to index.html for SPA routing
+    if (!fs.existsSync(filePath)) {
+        filePath = path.join(DIST_DIR, 'index.html');
+    }
+
+    const extname = String(path.extname(filePath)).toLowerCase();
+    const mimeTypes = {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.json': 'application/json',
+        '.png': 'image/png',
+        '.jpg': 'image/jpg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.wav': 'audio/wav',
+        '.mp4': 'video/mp4',
+        '.woff': 'application/font-woff',
+        '.ttf': 'application/font-ttf',
+        '.eot': 'application/vnd.ms-fontobject',
+        '.otf': 'application/font-otf',
+        '.wasm': 'application/wasm'
+    };
+
+    const contentType = mimeTypes[extname] || 'application/octet-stream';
+
+    fs.readFile(filePath, (error, content) => {
+        if (error) {
+            if(error.code == 'ENOENT') {
+                res.writeHead(404);
+                res.end('404 Not Found');
+            } else {
+                res.writeHead(500);
+                res.end('Server Error: '+error.code);
+            }
+        } else {
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(content, 'utf-8');
+        }
+    });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Frontend server running at http://localhost:${PORT}/`);
+});
+EOF
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend && node serve-static.js" "$LOG_DIR/drass-frontend.log"
+            sleep 3
+            if lsof -i :5173 >/dev/null 2>&1; then
+                FRONTEND_STARTED=true
+                echo -e "${GREEN}✓${NC} Frontend started with Node.js static server"
+            fi
+        fi
+
+        if [ "$FRONTEND_STARTED" = false ]; then
+            echo -e "${RED}✗${NC} Failed to start frontend with production build"
+            echo -e "${YELLOW}Check logs at: $LOG_DIR/drass-frontend.log${NC}"
+        fi
     else
         echo -e "${YELLOW}Frontend build not found, starting development server...${NC}"
         start_service "Drass Frontend Dev" "cd $BASE_DIR/frontend && npm run dev -- --host 0.0.0.0 --port 5173" "$LOG_DIR/drass-frontend.log"
+        sleep 5
+        if ! lsof -i :5173 >/dev/null 2>&1; then
+            echo -e "${RED}✗${NC} Development server failed to start"
+            echo -e "${YELLOW}Check logs at: $LOG_DIR/drass-frontend.log${NC}"
+        fi
     fi
 fi
 
