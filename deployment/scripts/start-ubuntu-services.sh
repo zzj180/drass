@@ -983,10 +983,27 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
         # Try different methods to serve the frontend
         FRONTEND_STARTED=false
 
-        # Method 1: Try global serve
+        # Method 1: Try global serve with different syntax
         if command -v serve >/dev/null 2>&1; then
-            echo -e "${BLUE}Using global serve command...${NC}"
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
+            echo -e "${BLUE}Checking serve version...${NC}"
+
+            # Check which version/type of serve is installed
+            SERVE_VERSION=$(serve --version 2>&1 || serve -V 2>&1 || echo "unknown")
+            echo -e "Serve version/info: $SERVE_VERSION"
+
+            # Check if it's the npm serve package
+            if serve --help 2>&1 | grep -q "Static file serving" || serve --help 2>&1 | grep -q "\-s,.*\-\-single"; then
+                echo -e "${BLUE}Using npm serve package...${NC}"
+                start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
+            elif serve --help 2>&1 | grep -q "serve \[OPTIONS\] COMMAND"; then
+                # This looks like a different serve command (possibly from another package)
+                echo -e "${YELLOW}Different serve command detected, skipping...${NC}"
+            else
+                # Try the standard npm serve syntax anyway
+                echo -e "${BLUE}Trying standard serve syntax...${NC}"
+                start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve dist -p 5173" "$LOG_DIR/drass-frontend.log" 5173
+            fi
+
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
@@ -994,10 +1011,16 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
             fi
         fi
 
-        # Method 2: Try npx serve
+        # Method 2: Try npx serve (force npm package)
         if [ "$FRONTEND_STARTED" = false ]; then
-            echo -e "${BLUE}Trying npx serve...${NC}"
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
+            echo -e "${BLUE}Trying npx serve (forcing npm package)...${NC}"
+            # First try the standard syntax
+            if ! start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173; then
+                # If that fails, try alternative syntax
+                echo -e "${BLUE}Trying alternative npx serve syntax...${NC}"
+                start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve dist -p 5173" "$LOG_DIR/drass-frontend.log" 5173
+            fi
+
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
@@ -1005,10 +1028,13 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
             fi
         fi
 
-        # Method 3: Try Python HTTP server
+        # Method 3: Try Python HTTP server (most reliable fallback)
         if [ "$FRONTEND_STARTED" = false ]; then
-            echo -e "${BLUE}Trying Python HTTP server...${NC}"
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173" "$LOG_DIR/drass-frontend.log" 5173
+            echo -e "${BLUE}Trying Python HTTP server (most reliable method)...${NC}"
+
+            # Check if Python3 is available
+            if command -v python3 >/dev/null 2>&1; then
+                start_service "Drass Frontend Python" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173 --bind 0.0.0.0" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
