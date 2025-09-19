@@ -63,6 +63,7 @@ class ConfigManager {
       websocket: {
         enabled: false, // Disabled for now - using HTTP API
         backendUrl: backendUrl.replace('http://', 'ws://').replace('https://', 'wss://'),  // Dynamic websocket URL
+      },
       upload: {
         maxFileSize: 10485760, // 10MB
         allowedTypes: [
