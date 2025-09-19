@@ -66,6 +66,52 @@ GRANT ALL PRIVILEGES ON DATABASE drass_production TO drass_user;
 \l drass_production
 EOF
 
+    # Configure PostgreSQL for local connections
+    echo -e "${BLUE}Configuring PostgreSQL for local connections...${NC}"
+
+    # Find PostgreSQL version
+    PG_VERSION=$(psql --version | grep -oE '[0-9]+' | head -1)
+    PG_CONFIG_DIR="/etc/postgresql/$PG_VERSION/main"
+
+    if [ -d "$PG_CONFIG_DIR" ]; then
+        # Update postgresql.conf to listen on localhost
+        PG_CONF="$PG_CONFIG_DIR/postgresql.conf"
+        if [ -f "$PG_CONF" ]; then
+            # Ensure PostgreSQL listens on localhost
+            if ! grep -q "^listen_addresses = 'localhost'" "$PG_CONF"; then
+                sudo sed -i "s/^#listen_addresses = 'localhost'/listen_addresses = 'localhost'/" "$PG_CONF"
+                sudo sed -i "s/^listen_addresses = .*/listen_addresses = 'localhost'/" "$PG_CONF"
+            fi
+
+            # Ensure port is 5432
+            if ! grep -q "^port = 5432" "$PG_CONF"; then
+                sudo sed -i "s/^#port = 5432/port = 5432/" "$PG_CONF"
+                sudo sed -i "s/^port = .*/port = 5432/" "$PG_CONF"
+            fi
+        fi
+
+        # Update pg_hba.conf for authentication
+        PG_HBA="$PG_CONFIG_DIR/pg_hba.conf"
+        if [ -f "$PG_HBA" ]; then
+            # Backup original
+            sudo cp "$PG_HBA" "$PG_HBA.original"
+
+            # Add rules for drass_user if not present
+            if ! grep -q "drass_production.*drass_user" "$PG_HBA"; then
+                echo "" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "# Drass application access" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "local   drass_production    drass_user                    md5" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "host    drass_production    drass_user    127.0.0.1/32    md5" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "host    drass_production    drass_user    ::1/128         md5" | sudo tee -a "$PG_HBA" >/dev/null
+            fi
+        fi
+
+        # Restart PostgreSQL to apply changes
+        echo -e "${BLUE}Restarting PostgreSQL to apply configuration...${NC}"
+        sudo systemctl restart postgresql
+        sleep 3
+    fi
+
     echo -e "${GREEN}✓${NC} Database 'drass_production' created with user 'drass_user'"
     echo -e "${YELLOW}Note: Default password is 'drass_password'. Please change it in production!${NC}"
 else
@@ -123,19 +169,47 @@ echo -e "\n${BLUE}========================================${NC}"
 echo -e "${BLUE}Service Status:${NC}"
 echo -e "${BLUE}========================================${NC}"
 
-# Check PostgreSQL
-if systemctl is-active --quiet postgresql; then
+# Check PostgreSQL - use multiple methods
+PG_RUNNING=false
+
+# Check if service is active
+if systemctl is-active --quiet postgresql || systemctl is-active --quiet postgresql@*-main; then
+    PG_RUNNING=true
+fi
+
+# Check with pg_isready
+if command -v pg_isready >/dev/null 2>&1; then
+    if pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
+        PG_RUNNING=true
+    fi
+fi
+
+if [ "$PG_RUNNING" = true ]; then
     echo -e "${GREEN}✓${NC} PostgreSQL is running"
 
-    # Test connection
+    # Test connection as postgres user first
+    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} PostgreSQL is accessible as postgres user"
+    fi
+
+    # Test connection as drass_user
     if PGPASSWORD=drass_password psql -U drass_user -h localhost -d drass_production -c "SELECT 1;" >/dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} PostgreSQL connection test successful"
     else
-        echo -e "${YELLOW}!${NC} PostgreSQL is running but connection test failed"
-        echo -e "   Try: PGPASSWORD=drass_password psql -U drass_user -h localhost -d drass_production"
+        echo -e "${YELLOW}!${NC} PostgreSQL is running but drass_user connection failed"
+        echo -e "   Trying alternative connection methods..."
+
+        # Try with 127.0.0.1 instead of localhost
+        if PGPASSWORD=drass_password psql -U drass_user -h 127.0.0.1 -d drass_production -c "SELECT 1;" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC} Connection works with 127.0.0.1"
+        else
+            echo -e "   Connection command: PGPASSWORD=drass_password psql -U drass_user -h localhost -d drass_production"
+            echo -e "   Check pg_hba.conf and postgresql.conf for proper configuration"
+        fi
     fi
 else
     echo -e "${RED}✗${NC} PostgreSQL is not running"
+    echo -e "   Try: sudo systemctl start postgresql"
 fi
 
 # Check Redis

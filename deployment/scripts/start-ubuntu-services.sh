@@ -134,8 +134,37 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'drass_production')\\g
 GRANT ALL PRIVILEGES ON DATABASE drass_production TO drass_user;
 EOF
         echo -e "${GREEN}✓${NC} Database setup completed"
+
+        # Update pg_hba.conf to ensure local connections work
+        PG_VERSION=$(sudo -u postgres psql -t -c "SELECT version();" | grep -oE '[0-9]+' | head -1)
+        PG_HBA="/etc/postgresql/$PG_VERSION/main/pg_hba.conf"
+
+        if [ -f "$PG_HBA" ]; then
+            # Check if we need to add local connection rules
+            if ! grep -q "host.*drass_production.*drass_user" "$PG_HBA"; then
+                echo -e "${BLUE}Updating PostgreSQL authentication configuration...${NC}"
+
+                # Backup original
+                sudo cp "$PG_HBA" "$PG_HBA.backup.$(date +%Y%m%d_%H%M%S)"
+
+                # Add connection rules for drass_user
+                echo "# Drass application connections" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "host    drass_production    drass_user    127.0.0.1/32    md5" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "host    drass_production    drass_user    ::1/128         md5" | sudo tee -a "$PG_HBA" >/dev/null
+                echo "local   drass_production    drass_user                    md5" | sudo tee -a "$PG_HBA" >/dev/null
+
+                # Reload PostgreSQL configuration
+                sudo systemctl reload "$PG_SERVICE"
+                echo -e "${GREEN}✓${NC} PostgreSQL configuration updated"
+            fi
+        fi
     else
-        echo -e "${YELLOW}PostgreSQL is running but not accessible. Check your PostgreSQL configuration.${NC}"
+        echo -e "${YELLOW}PostgreSQL is running but not accessible. Running diagnostic...${NC}"
+        # Try to fix common issues
+        if [ -x "$SCRIPT_DIR/check-postgresql.sh" ]; then
+            echo -e "${BLUE}Running PostgreSQL diagnostic and fix script...${NC}"
+            bash "$SCRIPT_DIR/check-postgresql.sh"
+        fi
     fi
 fi
 
@@ -265,8 +294,62 @@ echo -e "${BLUE}========================================${NC}"
 check_service 8001 "vLLM LLM Service"
 check_service 8010 "vLLM Embedding Service"
 check_service 8012 "vLLM Reranking Service"
-check_service 5432 "PostgreSQL"
-check_service 6379 "Redis"
+
+# Special check for PostgreSQL (might be listening on localhost only)
+PG_STATUS="not_running"
+
+# Method 1: Check with pg_isready (most reliable)
+if command -v pg_isready >/dev/null 2>&1; then
+    if pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
+        PG_STATUS="running"
+    elif pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+        PG_STATUS="running"
+    elif pg_isready -h /var/run/postgresql -p 5432 >/dev/null 2>&1; then
+        PG_STATUS="running"
+    fi
+fi
+
+# Method 2: Check with psql if pg_isready failed
+if [ "$PG_STATUS" = "not_running" ]; then
+    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+        PG_STATUS="running"
+    fi
+fi
+
+# Method 3: Check network ports as fallback
+if [ "$PG_STATUS" = "not_running" ]; then
+    if sudo netstat -tlnp 2>/dev/null | grep -q ":5432" || \
+       sudo ss -tlnp 2>/dev/null | grep -q ":5432" || \
+       lsof -i :5432 >/dev/null 2>&1; then
+        PG_STATUS="running"
+    fi
+fi
+
+# Method 4: Check if PostgreSQL service is active
+if [ "$PG_STATUS" = "not_running" ] && [ -n "$PG_SERVICE" ]; then
+    if systemctl is-active --quiet "$PG_SERVICE"; then
+        PG_STATUS="running_service_only"
+    fi
+fi
+
+# Display status
+if [ "$PG_STATUS" = "running" ]; then
+    echo -e "${GREEN}✓${NC} PostgreSQL is running on port 5432"
+elif [ "$PG_STATUS" = "running_service_only" ]; then
+    echo -e "${YELLOW}!${NC} PostgreSQL service is running but not accessible on port 5432"
+    echo -e "   Run: ${BLUE}$SCRIPT_DIR/check-postgresql.sh${NC} to diagnose"
+else
+    echo -e "${RED}✗${NC} PostgreSQL is not running"
+    echo -e "   Run: ${BLUE}$SCRIPT_DIR/check-postgresql.sh${NC} to diagnose and fix"
+fi
+
+# Redis check
+if redis-cli -h localhost ping >/dev/null 2>&1; then
+    echo -e "${GREEN}✓${NC} Redis is running on port 6379"
+else
+    check_service 6379 "Redis"
+fi
+
 check_service 8005 "ChromaDB"
 check_service 8000 "Drass API"
 check_service 5173 "Drass Frontend"
