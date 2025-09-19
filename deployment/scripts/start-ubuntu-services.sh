@@ -109,14 +109,15 @@ start_service() {
 
     # Check if service is already running on port
     if [ -n "$port" ] && lsof -i :$port >/dev/null 2>&1; then
-        echo -e "${YELLOW}$name is already running on port $port, checking if it's our service...${NC}"
-
-        # If it's the API service, kill the old process first
+        # Special handling for API port
         if [ "$port" == "8888" ]; then
-            echo -e "${BLUE}Killing old process on port 8888...${NC}"
-            lsof -i :8888 -t | xargs -r kill -9 2>/dev/null
-            sleep 2
+            echo -e "${RED}ERROR: Port 8888 is already in use when trying to start $name${NC}"
+            echo "Current process on port 8888:"
+            lsof -i :8888
+            echo -e "${YELLOW}This should not happen - port was cleaned before startup${NC}"
+            return 1
         else
+            echo -e "${YELLOW}$name is already running on port $port, skipping...${NC}"
             return 0
         fi
     fi
@@ -760,43 +761,37 @@ echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
 # Flag to track if we've attempted to start the API
 API_START_ATTEMPTED=false
 
-# First, clean up any stale processes on port 8888
+# First, forcefully clean up port 8888 and any related processes
+echo -e "${BLUE}Cleaning up port 8888 and related processes...${NC}"
+
+# Kill any existing simple_api.py or uvicorn processes
+pkill -9 -f "python.*simple_api.py" 2>/dev/null || true
+pkill -9 -f "uvicorn.*8888" 2>/dev/null || true
+pkill -9 -f "uvicorn.*app.main.*8888" 2>/dev/null || true
+
+# Kill anything on port 8888
 if lsof -i :8888 >/dev/null 2>&1; then
-    echo -e "${YELLOW}Port 8888 is in use, checking what's using it...${NC}"
-    echo "Current processes on port 8888:"
-    lsof -i :8888 || true
-
-    # Get PIDs and kill them
-    PIDS=$(lsof -ti :8888 2>/dev/null || true)
-    if [ -n "$PIDS" ]; then
-        echo -e "${BLUE}Killing PIDs: $PIDS${NC}"
-        # Try graceful kill first
-        for pid in $PIDS; do
-            kill $pid 2>/dev/null || true
-        done
-        sleep 3
-
-        # Force kill if still running
-        PIDS=$(lsof -ti :8888 2>/dev/null || true)
-        if [ -n "$PIDS" ]; then
-            echo -e "${YELLOW}Force killing remaining PIDs: $PIDS${NC}"
-            for pid in $PIDS; do
-                kill -9 $pid 2>/dev/null || true
-            done
-            sleep 1
-        fi
-    fi
-
-    # Final check
-    if lsof -i :8888 >/dev/null 2>&1; then
-        echo -e "${RED}WARNING: Port 8888 is still in use!${NC}"
-        lsof -i :8888 || true
-    else
-        echo -e "${GREEN}✓${NC} Port 8888 successfully cleaned up"
-    fi
+    echo -e "${YELLOW}Found processes on port 8888, force killing...${NC}"
+    lsof -i :8888
+    lsof -ti :8888 | xargs -r kill -9 2>/dev/null || true
+    sleep 2
 fi
 
-if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
+# Final verification
+PORT_CLEAN=true
+if lsof -i :8888 >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: Port 8888 is still in use after cleanup!${NC}"
+    echo "Processes still using port 8888:"
+    lsof -i :8888
+    echo -e "${YELLOW}Cannot continue with API startup. Please manually investigate.${NC}"
+    echo -e "${YELLOW}You can run: bash $BASE_DIR/deployment/scripts/cleanup-port-8888.sh${NC}"
+    PORT_CLEAN=false
+else
+    echo -e "${GREEN}✓${NC} Port 8888 is clean and ready"
+fi
+
+# Only proceed if port is clean
+if [ "$PORT_CLEAN" = true ] && ! check_service 8888 "Drass API" >/dev/null 2>&1; then
     # Setup environment configuration
     echo -e "${BLUE}Setting up environment configuration...${NC}"
 
