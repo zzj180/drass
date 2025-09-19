@@ -1035,10 +1035,11 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
             # Check if Python3 is available
             if command -v python3 >/dev/null 2>&1; then
                 start_service "Drass Frontend Python" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173 --bind 0.0.0.0" "$LOG_DIR/drass-frontend.log" 5173
-            sleep 3
-            if lsof -i :5173 >/dev/null 2>&1; then
-                FRONTEND_STARTED=true
-                echo -e "${GREEN}✓${NC} Frontend started with Python HTTP server"
+                sleep 3
+                if lsof -i :5173 >/dev/null 2>&1; then
+                    FRONTEND_STARTED=true
+                    echo -e "${GREEN}✓${NC} Frontend started with Python HTTP server"
+                fi
             fi
         fi
 
