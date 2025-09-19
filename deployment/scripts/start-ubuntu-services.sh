@@ -953,6 +953,9 @@ EOF
         # Check if app/main.py exists
         if [ -f "app/main.py" ]; then
             echo -e "${BLUE}Starting Drass API from existing application...${NC}"
+            echo -e "${BLUE}Debug: Found app/main.py at $(pwd)/app/main.py${NC}"
+            echo -e "${BLUE}Debug: Python3 location: $(which python3)${NC}"
+            echo -e "${BLUE}Debug: Python3 version: $(python3 --version)${NC}"
 
             # Clear proxy settings that might interfere with the API
             echo -e "${BLUE}Clearing proxy settings for API...${NC}"
@@ -988,9 +991,16 @@ EOF
             export RERANKING_API_BASE="http://localhost:8012/v1"
             export RERANKING_API_KEY="123456"
 
-            # Try with different worker counts and without proxy
+            # Try with production startup script if available
             API_START_ATTEMPTED=true
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+
+            if [ -f "$BASE_DIR/services/main-app/start_production.py" ]; then
+                echo -e "${BLUE}Using production startup script${NC}"
+                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 python3 start_production.py" "$LOG_DIR/drass-api.log" 8888
+            else
+                echo -e "${BLUE}Using uvicorn direct startup${NC}"
+                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+            fi
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server
@@ -1006,8 +1016,21 @@ EOF
 
     # Wait and check if API started (only if we attempted to start it)
     if [ "$API_START_ATTEMPTED" = true ]; then
-        sleep 5
-        if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
+        echo -e "${BLUE}Waiting for API to start (10 seconds)...${NC}"
+        sleep 10  # Give more time for the API to fully start
+
+        # Check multiple times before giving up
+        API_RUNNING=false
+        for i in 1 2 3; do
+            if check_service 8888 "Drass API" >/dev/null 2>&1; then
+                API_RUNNING=true
+                break
+            fi
+            echo -e "${YELLOW}Attempt $i: API not detected yet, waiting...${NC}"
+            sleep 3
+        done
+
+        if [ "$API_RUNNING" = false ]; then
             echo -e "${YELLOW}API failed to start, checking logs...${NC}"
             if [ -f "$LOG_DIR/drass-api.log" ]; then
                 echo -e "${YELLOW}Checking for errors in API log:${NC}"
@@ -1024,12 +1047,14 @@ EOF
             # Check if port is actually in use by something else
             echo -e "${BLUE}Checking what's on port 8888...${NC}"
             if lsof -i :8888 2>/dev/null; then
-                echo -e "${RED}Port 8888 is in use!${NC}"
-                echo -e "${YELLOW}Not attempting fallback since port is occupied.${NC}"
+                echo -e "${RED}Port 8888 is still in use!${NC}"
+                echo -e "${YELLOW}Likely the main API crashed after binding to the port.${NC}"
+                echo -e "${YELLOW}NOT attempting fallback - need manual intervention.${NC}"
+                echo -e "${BLUE}Run this to diagnose: bash $BASE_DIR/deployment/scripts/debug-startup.sh${NC}"
             else
-                echo -e "${YELLOW}Port 8888 is free, trying simple API as fallback...${NC}"
-                # Only try alternative if port is actually free
-                create_simple_api_server
+                echo -e "${YELLOW}Port 8888 is free, main API failed to start.${NC}"
+                echo -e "${RED}NOT starting fallback API - need to fix main API first!${NC}"
+                echo -e "${BLUE}Check the full log: tail -100 $LOG_DIR/drass-api.log${NC}"
             fi
         else
             echo -e "${GREEN}✓${NC} Drass API is running on port 8888"

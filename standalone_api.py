@@ -4,16 +4,28 @@ Standalone simple API server for Drass
 This is a completely independent server that doesn't import any app modules
 """
 
+# CRITICAL: Exit immediately if uvicorn tries to run this as a module
+if __name__ != "__main__":
+    print("ERROR: standalone_api.py must be run directly, not imported!")
+    import sys
+    sys.exit(1)
+
 import json
 import sys
 import os
+
+# Debug information
+print(f"Starting standalone_api.py...")
+print(f"Python: {sys.executable}")
+print(f"Script: {sys.argv[0]}")
+print(f"CWD: {os.getcwd()}")
+
+# Remove any paths that might lead to app imports
+sys.path = [p for p in sys.path if 'services' not in p and 'main-app' not in p]
+
+# Only import after cleaning path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import datetime
-
-# Make absolutely sure we're not importing anything from app
-# Clear the Python path to avoid accidental imports
-original_path = sys.path.copy()
-sys.path = [p for p in sys.path if 'main-app' not in p and 'services' not in p]
 
 PORT = 8888
 
