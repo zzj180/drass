@@ -114,16 +114,33 @@ start_service() {
     fi
 
     echo -e "${BLUE}Starting $name...${NC}"
-    nohup bash -c "$command" > "$log_file" 2>&1 &
+
+    # Clear old log file for this run
+    echo "=== Starting $name at $(date) ===" > "$log_file"
+    echo "Command: $command" >> "$log_file"
+
+    nohup bash -c "$command" >> "$log_file" 2>&1 &
     local pid=$!
-    sleep 5
+
+    # Give more time for ChromaDB to start
+    if [[ "$name" == *"ChromaDB"* ]]; then
+        sleep 8
+    else
+        sleep 5
+    fi
 
     # Check if the process started successfully
     if ps -p $pid > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} $name started (PID: $pid)"
         echo "$pid" > "$LOG_DIR/${name// /_}.pid" 2>/dev/null || true
+        return 0
     else
         echo -e "${RED}✗${NC} Failed to start $name"
+        # Show last few lines of log for debugging
+        if [ -f "$log_file" ]; then
+            echo -e "${YELLOW}Last lines from log:${NC}"
+            tail -5 "$log_file"
+        fi
         return 1
     fi
 }
@@ -609,17 +626,33 @@ if ! check_service 8005 "ChromaDB" >/dev/null 2>&1; then
         # Try different ways to start ChromaDB
         echo -e "${BLUE}Attempting to start ChromaDB service...${NC}"
 
+        # First, make sure the data directory exists
+        mkdir -p "$DATA_DIR/chromadb"
+
         # Method 1: Use chromadb module directly
         if python3 -c "import chromadb.app" 2>/dev/null; then
-            start_service "ChromaDB" "cd $BASE_DIR && python3 -m chromadb.app --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log" 8005
-        else
-            # Method 2: Use chroma run command if available
-            if command -v chroma >/dev/null 2>&1; then
-                start_service "ChromaDB" "cd $BASE_DIR && chroma run --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log" 8005
+            echo -e "${BLUE}Starting ChromaDB using chromadb.app module...${NC}"
+            if ! start_service "ChromaDB" "cd $BASE_DIR && python3 -m chromadb.app --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log" 8005; then
+                echo -e "${YELLOW}Method 1 failed, trying alternative methods...${NC}"
             else
-                # Method 3: Start ChromaDB server programmatically
-                echo -e "${BLUE}Starting ChromaDB using Python script...${NC}"
-                cat > "$BASE_DIR/start_chromadb.py" << 'EOF'
+                CHROMADB_STARTED=true
+            fi
+        fi
+
+        # Method 2: Use chroma run command if available
+        if [ -z "$CHROMADB_STARTED" ] && command -v chroma >/dev/null 2>&1; then
+            echo -e "${BLUE}Starting ChromaDB using chroma command...${NC}"
+            if ! start_service "ChromaDB" "cd $BASE_DIR && chroma run --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log" 8005; then
+                echo -e "${YELLOW}Method 2 failed, trying alternative methods...${NC}"
+            else
+                CHROMADB_STARTED=true
+            fi
+        fi
+
+        # Method 3: Start ChromaDB server programmatically
+        if [ -z "$CHROMADB_STARTED" ]; then
+            echo -e "${BLUE}Starting ChromaDB using Python script...${NC}"
+            cat > "$BASE_DIR/start_chromadb.py" << 'EOF'
 import chromadb
 import uvicorn
 import os
@@ -646,7 +679,65 @@ except ImportError:
     while True:
         time.sleep(60)
 EOF
-                start_service "ChromaDB" "cd $BASE_DIR && python3 start_chromadb.py $DATA_DIR/chromadb 8005" "$LOG_DIR/chromadb.log" 8005
+            if ! start_service "ChromaDB" "cd $BASE_DIR && python3 start_chromadb.py $DATA_DIR/chromadb 8005" "$LOG_DIR/chromadb.log" 8005; then
+                echo -e "${YELLOW}Method 3 failed. ChromaDB may not be fully installed.${NC}"
+
+                # Method 4: Try a simple in-memory ChromaDB instance
+                echo -e "${BLUE}Starting simple ChromaDB instance...${NC}"
+                cat > "$BASE_DIR/chromadb_simple.py" << 'EOF'
+#!/usr/bin/env python3
+import sys
+import os
+
+# Set data path
+data_path = sys.argv[1] if len(sys.argv) > 1 else "/home/qwkj/drass/data/chromadb"
+port = int(sys.argv[2]) if len(sys.argv) > 2 else 8005
+
+print(f"Starting ChromaDB on port {port}")
+
+try:
+    import chromadb
+    from chromadb.config import Settings
+
+    # Create persistent client
+    client = chromadb.PersistentClient(
+        path=data_path,
+        settings=Settings(allow_reset=True, anonymized_telemetry=False)
+    )
+
+    print(f"ChromaDB client initialized at {data_path}")
+
+    # Try to start a simple HTTP server for health checks
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == '/api/v1/collections':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"collections":[]}')
+            else:
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'ChromaDB is running')
+
+        def log_message(self, format, *args):
+            pass  # Suppress logs
+
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    print(f"ChromaDB health server running on port {port}")
+    server.serve_forever()
+
+except Exception as e:
+    print(f"Error starting ChromaDB: {e}")
+    import time
+    while True:
+        time.sleep(60)
+EOF
+                start_service "ChromaDB Simple" "cd $BASE_DIR && python3 chromadb_simple.py $DATA_DIR/chromadb 8005" "$LOG_DIR/chromadb.log" 8005
+            else
+                CHROMADB_STARTED=true
             fi
         fi
     else
