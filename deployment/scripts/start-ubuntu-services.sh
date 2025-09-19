@@ -978,15 +978,30 @@ EOF
 
             # Clear proxy settings that might interfere with the API
             echo -e "${BLUE}Clearing proxy settings for API...${NC}"
+
+            # Save current proxy settings for restoration later if needed
+            OLD_HTTP_PROXY="${HTTP_PROXY:-}"
+            OLD_HTTPS_PROXY="${HTTPS_PROXY:-}"
+            OLD_http_proxy="${http_proxy:-}"
+            OLD_https_proxy="${https_proxy:-}"
+            OLD_ALL_PROXY="${ALL_PROXY:-}"
+            OLD_all_proxy="${all_proxy:-}"
+
+            # Clear all proxy variables to prevent SOCKS proxy errors
             unset http_proxy
             unset https_proxy
             unset HTTP_PROXY
             unset HTTPS_PROXY
             unset all_proxy
             unset ALL_PROXY
+            unset ftp_proxy
+            unset FTP_PROXY
+            unset socks_proxy
+            unset SOCKS_PROXY
 
             # Export NO_PROXY for localhost connections
-            export NO_PROXY="localhost,127.0.0.1,::1"
+            export NO_PROXY="localhost,127.0.0.1,::1,0.0.0.0"
+            export no_proxy="localhost,127.0.0.1,::1,0.0.0.0"
 
             # Export LLM configuration to ensure it uses vLLM
             export LLM_PROVIDER="openai"
@@ -1013,22 +1028,78 @@ EOF
             # Try with production startup script if available
             API_START_ATTEMPTED=true
 
-            # Use virtual environment if available
-            if [ -f "$BASE_DIR/services/main-app/start_with_venv.sh" ]; then
-                echo -e "${BLUE}Using virtual environment startup${NC}"
-                # Run as qwkj user to use correct permissions
+            # First check if we have the noproxy startup script
+            if [ -f "$BASE_DIR/start-api-noproxy.sh" ]; then
+                echo -e "${BLUE}Using noproxy startup script (recommended for proxy environments)${NC}"
+                # Run the noproxy script which handles all proxy and environment setup
                 if [ "$EUID" -eq 0 ]; then
-                    start_service "Drass API" "su - qwkj -c 'cd $BASE_DIR/services/main-app && LLM_PROVIDER=openai LLM_BASE_URL=http://localhost:8001/v1 LLM_API_KEY=123456 LLM_MODEL=vllm OPENAI_API_BASE=http://localhost:8001/v1 MLX_ENABLED=false EMBEDDING_API_BASE=http://localhost:8010/v1 EMBEDDING_API_KEY=123456 RERANKING_API_BASE=http://localhost:8012/v1 bash start_with_venv.sh'" "$LOG_DIR/drass-api.log" 8888
+                    # Running as root, switch to qwkj user
+                    echo -e "${YELLOW}Switching to qwkj user for API startup${NC}"
+                    su - qwkj -c "bash $BASE_DIR/start-api-noproxy.sh"
                 else
-                    start_service "Drass API" "cd $BASE_DIR/services/main-app && source $VENV_DIR/bin/activate && LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' MLX_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+                    # Running as regular user, execute directly
+                    bash "$BASE_DIR/start-api-noproxy.sh"
                 fi
             elif [ -d "$VENV_DIR" ]; then
                 echo -e "${BLUE}Using virtual environment directly${NC}"
-                # Use venv Python
-                start_service "Drass API" "cd $BASE_DIR/services/main-app && source $VENV_DIR/bin/activate && source .env 2>/dev/null; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' MLX_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+                # Create a wrapper script that ensures proxy is cleared
+                cat > "$BASE_DIR/start_api_wrapper.sh" << 'EOF'
+#!/bin/bash
+# Clear all proxy settings
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY socks_proxy SOCKS_PROXY
+export NO_PROXY="localhost,127.0.0.1,::1,0.0.0.0"
+export no_proxy="localhost,127.0.0.1,::1,0.0.0.0"
+
+# Set environment
+export LLM_PROVIDER="openai"
+export LLM_BASE_URL="http://localhost:8001/v1"
+export LLM_API_KEY="123456"
+export LLM_MODEL="vllm"
+export MLX_ENABLED="false"
+export EMBEDDING_API_BASE="http://localhost:8010/v1"
+export EMBEDDING_API_KEY="123456"
+export RERANKING_API_BASE="http://localhost:8012/v1"
+export RERANKING_API_KEY="123456"
+export PORT=8888
+export HOST=0.0.0.0
+
+# Activate venv and start
+cd /home/qwkj/drass/services/main-app
+source /home/qwkj/drass/venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio
+EOF
+                chmod +x "$BASE_DIR/start_api_wrapper.sh"
+
+                # Start using the wrapper
+                start_service "Drass API" "$BASE_DIR/start_api_wrapper.sh" "$LOG_DIR/drass-api.log" 8888
             else
-                echo -e "${YELLOW}No virtual environment found, using system Python${NC}"
-                start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset PYTHONPATH PYTHONHOME; LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' MLX_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' PORT=8888 HOST=0.0.0.0 /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
+                echo -e "${YELLOW}No virtual environment found, using system Python with proxy bypass${NC}"
+                # Create a minimal wrapper for system Python
+                cat > "$BASE_DIR/start_api_system.sh" << 'EOF'
+#!/bin/bash
+# Clear all proxy settings
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY socks_proxy SOCKS_PROXY
+export NO_PROXY="localhost,127.0.0.1,::1,0.0.0.0"
+export no_proxy="localhost,127.0.0.1,::1,0.0.0.0"
+
+# Set environment
+export LLM_PROVIDER="openai"
+export LLM_BASE_URL="http://localhost:8001/v1"
+export LLM_API_KEY="123456"
+export LLM_MODEL="vllm"
+export MLX_ENABLED="false"
+export EMBEDDING_API_BASE="http://localhost:8010/v1"
+export EMBEDDING_API_KEY="123456"
+export RERANKING_API_BASE="http://localhost:8012/v1"
+export PORT=8888
+export HOST=0.0.0.0
+
+# Start with system Python
+cd /home/qwkj/drass/services/main-app
+/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio
+EOF
+                chmod +x "$BASE_DIR/start_api_system.sh"
+                start_service "Drass API" "$BASE_DIR/start_api_system.sh" "$LOG_DIR/drass-api.log" 8888
             fi
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
