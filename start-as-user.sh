@@ -91,16 +91,27 @@ cd "$BASE_DIR/services/main-app"
 # Create log directory if needed
 mkdir -p "$LOG_DIR"
 
+# Create fresh log file
+echo "=== Starting Drass API at $(date) ===" > "$LOG_DIR/drass-api.log"
+echo "User: $(whoami)" >> "$LOG_DIR/drass-api.log"
+echo "Python: $(which python)" >> "$LOG_DIR/drass-api.log"
+echo "Working dir: $(pwd)" >> "$LOG_DIR/drass-api.log"
+echo "" >> "$LOG_DIR/drass-api.log"
+
 # Start with nohup
 nohup python -m uvicorn app.main:app \
     --host 0.0.0.0 \
     --port 8888 \
     --workers 1 \
     --loop asyncio \
-    > "$LOG_DIR/drass-api.log" 2>&1 &
+    --log-level info \
+    >> "$LOG_DIR/drass-api.log" 2>&1 &
 
 API_PID=$!
 echo "API PID: $API_PID"
+
+# Save PID
+echo $API_PID > "$LOG_DIR/drass-api.pid"
 
 # 6. Wait and check
 echo -e "\n${BLUE}Waiting for API to start...${NC}"

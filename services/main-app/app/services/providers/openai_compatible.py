@@ -31,14 +31,41 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
     async def initialize(self):
         """Initialize OpenAI-compatible provider"""
-        self.client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers={
+        # Check if we're connecting to localhost and disable proxy
+        import os
+        is_local = any(host in self.base_url.lower() for host in ['localhost', '127.0.0.1', '0.0.0.0'])
+
+        client_kwargs = {
+            "base_url": self.base_url,
+            "headers": {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}"
             },
-            timeout=120.0  # Longer timeout for local models
-        )
+            "timeout": 120.0  # Longer timeout for local models
+        }
+
+        # For local connections, explicitly disable proxy
+        if is_local:
+            client_kwargs["proxy"] = None
+            # Also try to disable environment proxy temporarily
+            old_http_proxy = os.environ.pop('HTTP_PROXY', None)
+            old_https_proxy = os.environ.pop('HTTPS_PROXY', None)
+            old_http_proxy_lower = os.environ.pop('http_proxy', None)
+            old_https_proxy_lower = os.environ.pop('https_proxy', None)
+
+        try:
+            self.client = httpx.AsyncClient(**client_kwargs)
+        finally:
+            # Restore proxy settings if they were removed
+            if is_local:
+                if old_http_proxy:
+                    os.environ['HTTP_PROXY'] = old_http_proxy
+                if old_https_proxy:
+                    os.environ['HTTPS_PROXY'] = old_https_proxy
+                if old_http_proxy_lower:
+                    os.environ['http_proxy'] = old_http_proxy_lower
+                if old_https_proxy_lower:
+                    os.environ['https_proxy'] = old_https_proxy_lower
 
         # Test connection by listing models
         try:

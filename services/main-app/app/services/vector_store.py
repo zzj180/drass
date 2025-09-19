@@ -30,24 +30,53 @@ class VectorStoreService:
             if vector_store_type in ["chroma", "chromadb"]:
                 from langchain_community.vectorstores import Chroma
                 from langchain_community.embeddings import HuggingFaceEmbeddings
-                
+                import os
+                import shutil
+
                 # Use HuggingFace embeddings as fallback
                 embeddings = HuggingFaceEmbeddings(
                     model_name="sentence-transformers/all-MiniLM-L6-v2"
                 )
-                
+
                 persist_dir = getattr(settings, 'CHROMA_PERSIST_DIRECTORY', './data/chroma')
-                self.vector_store = Chroma(
-                    collection_name=self.collection_name,
-                    embedding_function=embeddings,
-                    persist_directory=persist_dir
-                )
-                logger.info(f"Initialized ChromaDB vector store at {persist_dir}")
+
+                # Handle corrupted ChromaDB - clean and retry
+                try:
+                    self.vector_store = Chroma(
+                        collection_name=self.collection_name,
+                        embedding_function=embeddings,
+                        persist_directory=persist_dir
+                    )
+                    logger.info(f"Initialized ChromaDB vector store at {persist_dir}")
+                except Exception as db_error:
+                    if "no such column" in str(db_error) or "database" in str(db_error).lower():
+                        logger.warning(f"ChromaDB appears corrupted: {db_error}")
+                        logger.info("Attempting to clean and reinitialize ChromaDB...")
+
+                        # Remove corrupted database
+                        if os.path.exists(persist_dir):
+                            shutil.rmtree(persist_dir, ignore_errors=True)
+                            logger.info(f"Removed corrupted ChromaDB at {persist_dir}")
+
+                        # Create fresh directory
+                        os.makedirs(persist_dir, exist_ok=True)
+
+                        # Try again with fresh database
+                        self.vector_store = Chroma(
+                            collection_name=self.collection_name,
+                            embedding_function=embeddings,
+                            persist_directory=persist_dir
+                        )
+                        logger.info(f"Successfully reinitialized ChromaDB vector store at {persist_dir}")
+                    else:
+                        raise db_error
             else:
                 logger.warning(f"Unsupported vector store type: {vector_store_type}")
-                
+
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")
+            # Don't fail completely - allow API to start without vector store
+            logger.warning("API will start without vector store functionality")
     
     async def add_documents(self, texts: List[str], metadatas: Optional[List[Dict[str, Any]]] = None) -> List[str]:
         """Add documents to the vector store"""
