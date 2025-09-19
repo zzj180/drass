@@ -59,7 +59,7 @@ services:
   vector_store:
     type: "chromadb"
     host: "localhost"
-    port: 8000
+    port: 8888
     collection_name: "drass_docs"
 
   database:
@@ -74,7 +74,7 @@ services:
 application:
   main_app:
     host: "127.0.0.1"
-    port: 8000
+    port: 8888
     workers: 2
     enable_docs: true
     cors_origins: ["http://localhost:5173", "http://localhost:3000"]
@@ -87,8 +87,8 @@ application:
   frontend:
     port: 5173
     build_mode: "development"
-    api_base: "http://localhost:8000"
-    websocket_url: "ws://localhost:8000/ws"
+    api_base: "http://localhost:8888"
+    websocket_url: "ws://localhost:8888/ws"
     source_map: true
     minify: false
 

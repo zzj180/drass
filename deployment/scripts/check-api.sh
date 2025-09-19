@@ -150,7 +150,7 @@ def health():
     return {"status": "healthy", "api": "test"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8888, log_level="info")
 EOF
 
     chmod +x "$BASE_DIR/test_api.py"
@@ -218,17 +218,17 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8888)
 EOF
 
         touch "$BASE_DIR/services/main-app/app/__init__.py"
         echo -e "${GREEN}✓${NC} Created minimal API structure"
     fi
 
-    # Kill any process using port 8000
-    if lsof -i :8000 >/dev/null 2>&1; then
-        echo -e "${YELLOW}Port 8000 is in use, stopping existing process...${NC}"
-        lsof -ti :8000 | xargs kill -9 2>/dev/null || true
+    # Kill any process using port 8888
+    if lsof -i :8888 >/dev/null 2>&1; then
+        echo -e "${YELLOW}Port 8888 is in use, stopping existing process...${NC}"
+        lsof -ti :8888 | xargs kill -9 2>/dev/null || true
         sleep 2
     fi
 }
@@ -237,7 +237,7 @@ EOF
 echo -e "\n${YELLOW}Running Drass API diagnostics...${NC}"
 
 # Check port status
-check_port 8000 "Drass API"
+check_port 8888 "Drass API"
 PORT_STATUS=$?
 
 # Check dependencies
@@ -252,7 +252,7 @@ check_logs
 
 # If API is running, test it
 if [ $PORT_STATUS -eq 0 ]; then
-    test_api 8000
+    test_api 8888
     API_TEST=$?
 else
     API_TEST=1
@@ -266,9 +266,9 @@ echo -e "${BLUE}========================================${NC}"
 if [ $PORT_STATUS -eq 0 ] && [ $API_TEST -eq 0 ]; then
     echo -e "${GREEN}✓ API is running and responding correctly${NC}"
 elif [ $PORT_STATUS -eq 0 ] && [ $API_TEST -ne 0 ]; then
-    echo -e "${YELLOW}⚠ Process is running on port 8000 but API is not responding${NC}"
+    echo -e "${YELLOW}⚠ Process is running on port 8888 but API is not responding${NC}"
     echo -e "\nRecommendations:"
-    echo -e "1. Check if it's the correct process: lsof -i :8000"
+    echo -e "1. Check if it's the correct process: lsof -i :8888"
     echo -e "2. Restart the API service"
     echo -e "3. Check logs: tail -f $LOG_DIR/drass-api.log"
 else
@@ -282,7 +282,7 @@ else
 
     echo -e "2. Start the API manually:"
     echo -e "   cd $BASE_DIR/services/main-app"
-    echo -e "   python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    echo -e "   python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888"
     echo -e ""
     echo -e "3. Or start a test API:"
     read -p "Do you want to start a test API? (y/n): " -n 1 -r

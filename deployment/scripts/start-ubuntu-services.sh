@@ -65,7 +65,7 @@ unset ALL_PROXY
 export NO_PROXY="localhost,127.0.0.1,::1,0.0.0.0"
 
 # Start the API
-python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888
 SCRIPT_EOF
 
     chmod +x "$BASE_DIR/services/main-app/start_api.sh"
@@ -198,7 +198,7 @@ def check_chromadb() -> bool:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8888)
 EOF
 
     # Create __init__.py file
@@ -206,17 +206,17 @@ EOF
 
     echo -e "${GREEN}✓${NC} Created minimal API at $BASE_DIR/services/main-app/app/main.py"
 
-    # Start the minimal API using the startup script
-    start_service "Drass API" "cd $BASE_DIR/services/main-app && bash start_api.sh" "$LOG_DIR/drass-api.log"
+    # Start the minimal API using the startup script (updated to use port 8888)
+    start_service "Drass API" "cd $BASE_DIR/services/main-app && sed -i 's/8000/8888/g' start_api.sh 2>/dev/null; bash start_api.sh" "$LOG_DIR/drass-api.log"
 }
 
 # Function to create simple API server
 create_simple_api_server() {
-    # First, make sure port 8000 is free
-    echo -e "${BLUE}Checking if port 8000 is free...${NC}"
-    if lsof -i :8000 >/dev/null 2>&1; then
-        echo -e "${YELLOW}Port 8000 is in use, attempting to free it...${NC}"
-        lsof -ti :8000 | xargs kill -9 2>/dev/null || true
+    # First, make sure port 8888 is free
+    echo -e "${BLUE}Checking if port 8888 is free...${NC}"
+    if lsof -i :8888 >/dev/null 2>&1; then
+        echo -e "${YELLOW}Port 8888 is in use, attempting to free it...${NC}"
+        lsof -ti :8888 | xargs kill -9 2>/dev/null || true
         sleep 2
     fi
 
@@ -288,7 +288,7 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
         sys.stdout.flush()
 
 if __name__ == '__main__':
-    PORT = 8000
+    PORT = 8888
 
     # Test if port is available
     test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -326,8 +326,8 @@ EOF
     sleep 3
 
     # Check if it actually started
-    if lsof -i :8000 >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Simple API server is running on port 8000"
+    if lsof -i :8888 >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} Simple API server is running on port 8888"
     else
         echo -e "${RED}✗${NC} Simple API server failed to start"
         echo -e "${YELLOW}Checking what happened...${NC}"
@@ -576,7 +576,7 @@ fi
 
 # Start Drass backend API
 echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
-if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
+if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
     # First, ensure FastAPI and uvicorn are installed
     echo -e "${BLUE}Checking backend dependencies...${NC}"
     if ! python3 -c "import fastapi, uvicorn" 2>/dev/null; then
@@ -637,7 +637,7 @@ if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
             export NO_PROXY="localhost,127.0.0.1,::1"
 
             # Try with different worker counts and without proxy
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server
@@ -653,7 +653,7 @@ if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
 
     # Wait and check if API started
     sleep 5
-    if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
+    if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
         echo -e "${YELLOW}API failed to start, checking logs...${NC}"
         if [ -f "$LOG_DIR/drass-api.log" ]; then
             echo -e "${YELLOW}Last 20 lines of API log:${NC}"
@@ -661,8 +661,8 @@ if ! check_service 8000 "Drass API" >/dev/null 2>&1; then
         fi
 
         # Check if port is actually in use by something else
-        echo -e "${BLUE}Checking what's on port 8000...${NC}"
-        lsof -i :8000 2>/dev/null || echo "  Port 8000 appears to be free"
+        echo -e "${BLUE}Checking what's on port 8888...${NC}"
+        lsof -i :8888 2>/dev/null || echo "  Port 8888 appears to be free"
 
         # Try alternative startup
         echo -e "${BLUE}Trying alternative API startup...${NC}"
@@ -791,12 +791,12 @@ else
 fi
 
 check_service 8005 "ChromaDB"
-check_service 8000 "Drass API"
+check_service 8888 "Drass API"
 check_service 5173 "Drass Frontend"
 
 echo -e "\n${GREEN}All services have been started!${NC}"
 echo -e "\nAccess the application at: ${BLUE}http://localhost:5173${NC}"
-echo -e "API documentation at: ${BLUE}http://localhost:8000/docs${NC}"
+echo -e "API documentation at: ${BLUE}http://localhost:8888/docs${NC}"
 echo -e "\nLogs are available in: ${BLUE}$LOG_DIR${NC}"
 
 # Show how to monitor logs

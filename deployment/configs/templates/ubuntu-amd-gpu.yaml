@@ -11,7 +11,7 @@ services:
   # Main API service
   api:
     enabled: true
-    port: 8000
+    port: 8888
     replicas: 1
     environment:
       LOG_LEVEL: INFO
@@ -36,8 +36,8 @@ services:
     port: 5173
     replicas: 1
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: http://localhost:8888
+      VITE_WS_URL: ws://localhost:8888
       NODE_ENV: production
     resources:
       cpu: "2"
@@ -205,7 +205,7 @@ security:
   encryption: true
   secrets_manager: local
   firewall_rules:
-    - port: 8000
+    - port: 8888
       protocol: tcp
       source: 0.0.0.0/0  # API access
     - port: 5173

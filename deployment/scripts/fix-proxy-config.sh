@@ -73,7 +73,7 @@ echo "  HTTPS_PROXY: ${HTTPS_PROXY:-not set}"
 cd /home/qwkj/drass/services/main-app
 
 # Start the API
-python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio
 EOF
 
 chmod +x "$BASE_DIR/services/main-app/start_api_no_proxy.sh"
@@ -166,4 +166,4 @@ echo -e "2. Or restart using the main startup script:"
 echo -e "   ${BLUE}$BASE_DIR/deployment/scripts/start-ubuntu-services.sh${NC}"
 echo -e ""
 echo -e "3. Check API status:"
-echo -e "   ${BLUE}curl http://localhost:8000/health${NC}"
+echo -e "   ${BLUE}curl http://localhost:8888/health${NC}"

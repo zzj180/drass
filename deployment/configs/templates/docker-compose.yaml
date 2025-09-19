@@ -11,7 +11,7 @@ services:
     enabled: true
     image: drass/api
     version: latest
-    port: 8000
+    port: 8888
     replicas: 1
     environment:
       LOG_LEVEL: INFO
@@ -34,8 +34,8 @@ services:
     port: 5173
     replicas: 1
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: http://localhost:8888
+      VITE_WS_URL: ws://localhost:8888
     resources:
       cpu: "1"
       memory: "1G"
@@ -149,7 +149,7 @@ security:
   encryption: true
   secrets_manager: local
   firewall_rules:
-    - port: 8000
+    - port: 8888
       protocol: tcp
       source: 0.0.0.0/0
     - port: 5173

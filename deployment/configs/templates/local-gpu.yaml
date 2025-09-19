@@ -9,7 +9,7 @@ deployment:
 services:
   api:
     enabled: true
-    port: 8000
+    port: 8888
     replicas: 2
     environment:
       LOG_LEVEL: INFO
@@ -32,8 +32,8 @@ services:
     port: 5173
     replicas: 1
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: http://localhost:8888
+      VITE_WS_URL: ws://localhost:8888
       NODE_ENV: production
     resources:
       cpu: "2"
@@ -181,6 +181,6 @@ security:
     - port: 443
       protocol: tcp
       source: 0.0.0.0/0
-    - port: 8000
+    - port: 8888
       protocol: tcp
       source: 10.0.0.0/8  # Internal network only
