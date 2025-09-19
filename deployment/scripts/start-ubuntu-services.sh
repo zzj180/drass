@@ -22,7 +22,70 @@ mkdir -p "$LOG_DIR"
 mkdir -p "$DATA_DIR/chromadb"
 mkdir -p "$DATA_DIR/uploads"
 
-echo -e "${BLUE}Starting Drass services on Ubuntu with AMD GPUs...${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}Starting Drass Services on Ubuntu${NC}"
+echo -e "${BLUE}========================================${NC}"
+
+# Function to check if services are already running
+check_existing_services() {
+    echo -e "\n${BLUE}Checking for already running services...${NC}"
+    local has_running=false
+
+    if lsof -i :5173 >/dev/null 2>&1; then
+        echo -e "${YELLOW}! Frontend is already running on port 5173${NC}"
+        has_running=true
+    fi
+
+    if lsof -i :8888 >/dev/null 2>&1; then
+        echo -e "${YELLOW}! API is already running on port 8888${NC}"
+        has_running=true
+    fi
+
+    if lsof -i :8005 >/dev/null 2>&1; then
+        echo -e "${YELLOW}! ChromaDB is already running on port 8005${NC}"
+        has_running=true
+    fi
+
+    if [ "$has_running" = true ]; then
+        echo -e "\n${YELLOW}Warning: Some services are already running!${NC}"
+        echo -e "Do you want to:"
+        echo -e "  1) Restart all services (stop then start)"
+        echo -e "  2) Start only stopped services"
+        echo -e "  3) Cancel"
+
+        read -p "Enter your choice (1-3): " choice
+
+        case $choice in
+            1)
+                echo -e "${BLUE}Restarting all services...${NC}"
+                if [ -f "$SCRIPT_DIR/stop-ubuntu-services.sh" ]; then
+                    bash "$SCRIPT_DIR/stop-ubuntu-services.sh"
+                    sleep 3
+                else
+                    echo -e "${YELLOW}Stop script not found, killing processes manually...${NC}"
+                    lsof -ti :5173,8888,8005 | xargs -r kill -9 2>/dev/null || true
+                    sleep 3
+                fi
+                ;;
+            2)
+                echo -e "${BLUE}Starting only stopped services...${NC}"
+                ;;
+            3)
+                echo -e "${YELLOW}Cancelled. Exiting...${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Exiting...${NC}"
+                exit 1
+                ;;
+        esac
+    fi
+}
+
+# Check for existing services
+check_existing_services
+
+echo -e "\n${BLUE}Starting Drass services...${NC}"
 
 # Function to check if a service is running
 check_service() {
@@ -37,15 +100,32 @@ check_service() {
     fi
 }
 
-# Function to start a service
+# Function to start a service (with check for already running)
 start_service() {
     local name=$1
     local command=$2
     local log_file=$3
+    local port=$4  # Optional port to check
+
+    # Check if service is already running on port
+    if [ -n "$port" ] && lsof -i :$port >/dev/null 2>&1; then
+        echo -e "${YELLOW}$name is already running on port $port, skipping...${NC}"
+        return 0
+    fi
 
     echo -e "${BLUE}Starting $name...${NC}"
     nohup bash -c "$command" > "$log_file" 2>&1 &
+    local pid=$!
     sleep 5
+
+    # Check if the process started successfully
+    if ps -p $pid > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} $name started (PID: $pid)"
+        echo "$pid" > "$LOG_DIR/${name// /_}.pid" 2>/dev/null || true
+    else
+        echo -e "${RED}✗${NC} Failed to start $name"
+        return 1
+    fi
 }
 
 # Function to create minimal API
@@ -207,7 +287,7 @@ EOF
     echo -e "${GREEN}✓${NC} Created minimal API at $BASE_DIR/services/main-app/app/main.py"
 
     # Start the minimal API using the startup script (updated to use port 8888)
-    start_service "Drass API" "cd $BASE_DIR/services/main-app && sed -i 's/8000/8888/g' start_api.sh 2>/dev/null; bash start_api.sh" "$LOG_DIR/drass-api.log"
+    start_service "Drass API" "cd $BASE_DIR/services/main-app && sed -i 's/8000/8888/g' start_api.sh 2>/dev/null; bash start_api.sh" "$LOG_DIR/drass-api.log" 8888
 }
 
 # Function to create simple API server
@@ -320,7 +400,7 @@ EOF
     echo -e "${GREEN}✓${NC} Created simple API server"
 
     # Start with explicit proxy clearing
-    start_service "Simple API" "cd $BASE_DIR && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 simple_api.py" "$LOG_DIR/drass-api.log"
+    start_service "Simple API" "cd $BASE_DIR && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 simple_api.py" "$LOG_DIR/drass-api.log" 8888
 
     # Wait a bit more to ensure it starts
     sleep 3
@@ -346,17 +426,17 @@ check_service 8012 "vLLM Reranking Service"
 # Start vLLM services if not running
 if ! check_service 8001 "vLLM LLM Service" >/dev/null 2>&1; then
     echo -e "${YELLOW}Starting vLLM LLM Service...${NC}"
-    start_service "vLLM LLM" "ROCM_PATH=/opt/rocm PYTHONPATH=/home/qwkj/triton/python HIP_VISIBLE_DEVICES='0,1' PYTORCH_ROCM_ARCH=gfx906 vllm serve '/home/qwkj/.cache/modelscope/hub/models/deepseek-ai/DeepSeek-R1-0528-Qwen3-8B' --port 8001 --dtype float16 --tensor-parallel-size 2 --block-size 32 --max-num-seqs 64 --max-model-len 12288 --gpu_memory_utilization=0.45 --api_key 123456 --served-model-name vllm" "$LOG_DIR/vllm-llm.log"
+    start_service "vLLM LLM" "ROCM_PATH=/opt/rocm PYTHONPATH=/home/qwkj/triton/python HIP_VISIBLE_DEVICES='0,1' PYTORCH_ROCM_ARCH=gfx906 vllm serve '/home/qwkj/.cache/modelscope/hub/models/deepseek-ai/DeepSeek-R1-0528-Qwen3-8B' --port 8001 --dtype float16 --tensor-parallel-size 2 --block-size 32 --max-num-seqs 64 --max-model-len 12288 --gpu_memory_utilization=0.45 --api_key 123456 --served-model-name vllm" "$LOG_DIR/vllm-llm.log" 8001
 fi
 
 if ! check_service 8010 "vLLM Embedding Service" >/dev/null 2>&1; then
     echo -e "${YELLOW}Starting vLLM Embedding Service...${NC}"
-    start_service "vLLM Embedding" "python -m vllm.entrypoints.openai.api_server --model /home/qwkj/.cache/modelscope/hub/models/Qwen/Qwen3-Embedding-8B --tensor-parallel-size 2 --max_model_len=8096 --gpu_memory_utilization=0.3 --port 8010 --host 0.0.0.0 --served_model_name Qwen3-Embedding-8B --task embed --api_key 123456" "$LOG_DIR/vllm-embedding.log"
+    start_service "vLLM Embedding" "python -m vllm.entrypoints.openai.api_server --model /home/qwkj/.cache/modelscope/hub/models/Qwen/Qwen3-Embedding-8B --tensor-parallel-size 2 --max_model_len=8096 --gpu_memory_utilization=0.3 --port 8010 --host 0.0.0.0 --served_model_name Qwen3-Embedding-8B --task embed --api_key 123456" "$LOG_DIR/vllm-embedding.log" 8010
 fi
 
 if ! check_service 8012 "vLLM Reranking Service" >/dev/null 2>&1; then
     echo -e "${YELLOW}Starting vLLM Reranking Service...${NC}"
-    start_service "vLLM Reranking" "python -m vllm.entrypoints.openai.api_server --model /home/qwkj/Qwen3-Reranker-8B --tensor-parallel-size 2 --max_model_len=8096 --gpu_memory_utilization=0.3 --port 8012 --host 0.0.0.0 --served_model_name Qwen3-Reranker-8B --task embed --api_key 123456" "$LOG_DIR/vllm-reranking.log"
+    start_service "vLLM Reranking" "python -m vllm.entrypoints.openai.api_server --model /home/qwkj/Qwen3-Reranker-8B --tensor-parallel-size 2 --max_model_len=8096 --gpu_memory_utilization=0.3 --port 8012 --host 0.0.0.0 --served_model_name Qwen3-Reranker-8B --task embed --api_key 123456" "$LOG_DIR/vllm-reranking.log" 8012
 fi
 
 # Start PostgreSQL if not running
@@ -531,11 +611,11 @@ if ! check_service 8005 "ChromaDB" >/dev/null 2>&1; then
 
         # Method 1: Use chromadb module directly
         if python3 -c "import chromadb.app" 2>/dev/null; then
-            start_service "ChromaDB" "cd $BASE_DIR && python3 -m chromadb.app --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log"
+            start_service "ChromaDB" "cd $BASE_DIR && python3 -m chromadb.app --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log" 8005
         else
             # Method 2: Use chroma run command if available
             if command -v chroma >/dev/null 2>&1; then
-                start_service "ChromaDB" "cd $BASE_DIR && chroma run --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log"
+                start_service "ChromaDB" "cd $BASE_DIR && chroma run --path $DATA_DIR/chromadb --port 8005 --host 0.0.0.0" "$LOG_DIR/chromadb.log" 8005
             else
                 # Method 3: Start ChromaDB server programmatically
                 echo -e "${BLUE}Starting ChromaDB using Python script...${NC}"
@@ -566,7 +646,7 @@ except ImportError:
     while True:
         time.sleep(60)
 EOF
-                start_service "ChromaDB" "cd $BASE_DIR && python3 start_chromadb.py $DATA_DIR/chromadb 8005" "$LOG_DIR/chromadb.log"
+                start_service "ChromaDB" "cd $BASE_DIR && python3 start_chromadb.py $DATA_DIR/chromadb 8005" "$LOG_DIR/chromadb.log" 8005
             fi
         fi
     else
@@ -724,7 +804,7 @@ EOF
             export RERANKING_API_KEY="123456"
 
             # Try with different worker counts and without proxy
-            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log"
+            start_service "Drass API" "cd $BASE_DIR/services/main-app && source .env 2>/dev/null; unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' LLM_PROVIDER='openai' LLM_BASE_URL='http://localhost:8001/v1' LLM_API_KEY='123456' LLM_MODEL='vllm' OPENAI_API_BASE='http://localhost:8001/v1' MLX_ENABLED='false' LMSTUDIO_ENABLED='false' EMBEDDING_API_BASE='http://localhost:8010/v1' EMBEDDING_API_KEY='123456' RERANKING_API_BASE='http://localhost:8012/v1' python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers 1 --loop asyncio" "$LOG_DIR/drass-api.log" 8888
         else
             echo -e "${YELLOW}Main application not found, creating minimal API...${NC}"
             # Create a minimal API server
@@ -796,7 +876,7 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
 
                 # Method 3: Use development server as fallback
                 echo -e "${BLUE}Starting frontend in development mode...${NC}"
-                start_service "Drass Frontend Dev" "cd $BASE_DIR/frontend && npm run dev -- --host 0.0.0.0 --port 5173" "$LOG_DIR/drass-frontend.log"
+                start_service "Drass Frontend Dev" "cd $BASE_DIR/frontend && npm run dev -- --host 0.0.0.0 --port 5173" "$LOG_DIR/drass-frontend.log" 5173
                 exit 0
             }
         }
@@ -815,7 +895,7 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
         # Method 1: Try global serve
         if command -v serve >/dev/null 2>&1; then
             echo -e "${BLUE}Using global serve command...${NC}"
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend && serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
@@ -826,7 +906,7 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
         # Method 2: Try npx serve
         if [ "$FRONTEND_STARTED" = false ]; then
             echo -e "${BLUE}Trying npx serve...${NC}"
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve -s dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
@@ -837,7 +917,7 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
         # Method 3: Try Python HTTP server
         if [ "$FRONTEND_STARTED" = false ]; then
             echo -e "${BLUE}Trying Python HTTP server...${NC}"
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173" "$LOG_DIR/drass-frontend.log"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend/dist && python3 -m http.server 5173" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
@@ -905,7 +985,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Frontend server running at http://localhost:${PORT}/`);
 });
 EOF
-            start_service "Drass Frontend" "cd $BASE_DIR/frontend && node serve-static.js" "$LOG_DIR/drass-frontend.log"
+            start_service "Drass Frontend" "cd $BASE_DIR/frontend && node serve-static.js" "$LOG_DIR/drass-frontend.log" 5173
             sleep 3
             if lsof -i :5173 >/dev/null 2>&1; then
                 FRONTEND_STARTED=true
