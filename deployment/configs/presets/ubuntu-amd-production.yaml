@@ -1,0 +1,83 @@
+# Production preset for Ubuntu 22.04 with AMD GPUs
+# This is a ready-to-use configuration for your specific server setup
+
+deployment:
+  type: local-gpu
+  name: drass-ubuntu-production
+  environment: production
+
+services:
+  api:
+    enabled: true
+    port: 8000
+    replicas: 1
+    environment:
+      LOG_LEVEL: INFO
+      ENABLE_CORS: "true"
+      ENABLE_STREAMING: "true"
+      WORKERS: "4"
+
+  frontend:
+    enabled: true
+    port: 5173
+    replicas: 1
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+
+  llm:
+    provider: vllm
+    model: vllm
+    base_url: http://localhost:8001/v1
+    api_key: "123456"
+    temperature: 0.7
+    max_tokens: 12288
+
+  embedding:
+    provider: openai
+    model: Qwen3-Embedding-8B
+    api_key: "123456"
+    base_url: http://localhost:8010/v1
+    batch_size: 100
+
+  reranking:
+    enabled: true
+    provider: local
+    model: Qwen3-Reranker-8B
+    api_key: "123456"
+    base_url: http://localhost:8012/v1
+    top_k: 20
+
+  vector_store:
+    provider: chromadb
+    connection:
+      host: localhost
+      port: 8005
+    persistence:
+      enabled: true
+      path: /home/qwkj/drass/data/chromadb
+
+  database:
+    provider: postgresql
+    connection:
+      host: localhost
+      port: 5432
+      username: drass_user
+      password: ${DB_PASSWORD}
+      database: drass_production
+
+  cache:
+    provider: redis
+    connection:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD}
+      db: 0
+
+environment:
+  variables:
+    NODE_ENV: production
+    DEPLOYMENT_TYPE: local-gpu
+    APP_HOME: /home/qwkj/drass
+    DATA_DIR: /home/qwkj/drass/data
+    LOG_DIR: /home/qwkj/drass/logs

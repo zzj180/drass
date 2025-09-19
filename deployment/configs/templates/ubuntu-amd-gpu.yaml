@@ -1,0 +1,222 @@
+# Ubuntu AMD GPU Deployment Template
+# Optimized for Ubuntu 22.04 with AMD GPUs running vLLM services
+# This configuration uses existing vLLM model services
+
+deployment:
+  type: local-gpu
+  name: drass-ubuntu-amd
+  environment: production
+
+services:
+  # Main API service
+  api:
+    enabled: true
+    port: 8000
+    replicas: 1
+    environment:
+      LOG_LEVEL: INFO
+      ENABLE_CORS: "true"
+      ENABLE_STREAMING: "true"
+      ENABLE_AGENT: "true"
+      ENABLE_MEMORY: "true"
+      WORKERS: "4"
+    resources:
+      cpu: "4"
+      memory: "8G"
+    health_check:
+      enabled: true
+      path: /health
+      interval: 30
+      timeout: 5
+      retries: 3
+
+  # Frontend service
+  frontend:
+    enabled: true
+    port: 5173
+    replicas: 1
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+      NODE_ENV: production
+    resources:
+      cpu: "2"
+      memory: "2G"
+
+  # LLM Service - Using existing vLLM DeepSeek model
+  llm:
+    enabled: true
+    provider: vllm
+    model: vllm  # served-model-name from vLLM
+    base_url: http://localhost:8001/v1
+    api_key: "123456"  # API key from vLLM service
+    temperature: 0.7
+    max_tokens: 12288  # Matches max-model-len
+    environment:
+      LOG_LEVEL: INFO
+      VLLM_USE_MODELSCOPE: "true"
+    # Note: The vLLM service is already running, no need to start it
+    external_service: true
+
+  # Embedding Service - Using existing vLLM Qwen3 Embedding
+  embedding:
+    enabled: true
+    provider: openai  # vLLM provides OpenAI-compatible API
+    model: Qwen3-Embedding-8B  # served-model-name
+    api_key: "123456"
+    base_url: http://localhost:8010/v1
+    batch_size: 100
+    dimensions: 1536  # Qwen3 embedding dimensions
+    # Note: The embedding service is already running
+    external_service: true
+
+  # Reranking Service - Using existing vLLM Qwen3 Reranker
+  reranking:
+    enabled: true
+    provider: local
+    model: Qwen3-Reranker-8B  # served-model-name
+    api_key: "123456"
+    base_url: http://localhost:8012/v1
+    top_k: 20
+    # Note: The reranking service is already running
+    external_service: true
+
+  # Vector Store - ChromaDB for local storage
+  vector_store:
+    enabled: true
+    provider: chromadb
+    connection:
+      host: localhost
+      port: 8005
+    persistence:
+      enabled: true
+      path: /home/qwkj/drass/data/chromadb
+
+  # Database - PostgreSQL
+  database:
+    enabled: true
+    provider: postgresql
+    connection:
+      host: localhost
+      port: 5432
+      username: drass_user
+      password: ${DB_PASSWORD}
+      database: drass_production
+    pool:
+      min_connections: 5
+      max_connections: 20
+
+  # Cache - Redis
+  cache:
+    enabled: true
+    provider: redis
+    connection:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD}
+      db: 0
+    ttl: 7200
+
+environment:
+  variables:
+    NODE_ENV: production
+    PYTHONUNBUFFERED: "1"
+    DEPLOYMENT_TYPE: local-gpu
+
+    # LLM Service Configuration
+    LLM_PROVIDER: vllm
+    LLM_MODEL: vllm
+    LLM_BASE_URL: http://localhost:8001/v1
+    LLM_API_KEY: "123456"
+
+    # Embedding Service Configuration
+    EMBEDDING_PROVIDER: openai
+    EMBEDDING_MODEL: Qwen3-Embedding-8B
+    EMBEDDING_API_KEY: "123456"
+    EMBEDDING_API_BASE: http://localhost:8010/v1
+
+    # Reranking Service Configuration
+    RERANKING_ENABLED: "true"
+    RERANKING_PROVIDER: local
+    RERANKING_MODEL: Qwen3-Reranker-8B
+    RERANKING_API_KEY: "123456"
+    RERANKING_API_BASE: http://localhost:8012/v1
+
+    # Vector Store Configuration
+    VECTOR_STORE_TYPE: chromadb
+    CHROMA_PERSIST_DIRECTORY: /home/qwkj/drass/data/chromadb
+
+    # Application paths
+    APP_HOME: /home/qwkj/drass
+    DATA_DIR: /home/qwkj/drass/data
+    LOG_DIR: /home/qwkj/drass/logs
+
+  secrets:
+    DB_PASSWORD: ${DB_PASSWORD}
+    REDIS_PASSWORD: ${REDIS_PASSWORD}
+    SECRET_KEY: ${SECRET_KEY}
+    JWT_SECRET: ${JWT_SECRET}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
+  files:
+    - .env.production
+
+resources:
+  cpu:
+    request: "8"
+    limit: "16"
+  memory:
+    request: "16G"
+    limit: "32G"
+  gpu:
+    enabled: true
+    type: amd
+    count: 2
+    # GPU resources are managed by existing vLLM services
+  storage:
+    size: "200G"
+    type: ssd
+    encryption: true
+
+networking:
+  ports:
+    api: 8000
+    frontend: 5173
+    llm: 8001  # vLLM service
+    embedding: 8010  # Embedding service
+    reranking: 8012  # Reranking service
+    database: 5432
+    redis: 6379
+    chromadb: 8005
+  domain: ${DOMAIN_NAME}
+  ssl: false  # Enable if using HTTPS
+  load_balancer:
+    enabled: false  # Enable if using nginx/traefik
+
+monitoring:
+  enabled: true
+  providers:
+    - prometheus
+    - grafana
+  log_level: INFO
+  log_file: /home/qwkj/drass/logs/drass.log
+
+security:
+  encryption: true
+  secrets_manager: local
+  firewall_rules:
+    - port: 8000
+      protocol: tcp
+      source: 0.0.0.0/0  # API access
+    - port: 5173
+      protocol: tcp
+      source: 0.0.0.0/0  # Frontend access
+    - port: 8001
+      protocol: tcp
+      source: 127.0.0.1/32  # LLM service (local only)
+    - port: 8010
+      protocol: tcp
+      source: 127.0.0.1/32  # Embedding (local only)
+    - port: 8012
+      protocol: tcp
+      source: 127.0.0.1/32  # Reranking (local only)
