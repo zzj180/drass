@@ -425,8 +425,17 @@ EOF
     chmod +x "$BASE_DIR/simple_api.py"
     echo -e "${GREEN}✓${NC} Created simple API server"
 
-    # Start with explicit proxy clearing
-    start_service "Simple API" "cd $BASE_DIR && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 simple_api.py" "$LOG_DIR/drass-api.log" 8888
+    # Copy standalone API if it doesn't exist
+    if [ ! -f "$BASE_DIR/simple_api.py" ] || [ -f "$BASE_DIR/standalone_api.py" ]; then
+        cp "$BASE_DIR/standalone_api.py" "$BASE_DIR/simple_api.py" 2>/dev/null || true
+    fi
+
+    # Start with explicit proxy clearing - use standalone_api.py to avoid any imports
+    if [ -f "$BASE_DIR/standalone_api.py" ]; then
+        start_service "Simple API" "cd $BASE_DIR && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 standalone_api.py" "$LOG_DIR/drass-api.log" 8888
+    else
+        start_service "Simple API" "cd $BASE_DIR && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY && NO_PROXY='localhost,127.0.0.1,::1' python3 simple_api.py" "$LOG_DIR/drass-api.log" 8888
+    fi
 
     # Wait a bit more to ensure it starts
     sleep 3
@@ -764,8 +773,9 @@ API_START_ATTEMPTED=false
 # First, forcefully clean up port 8888 and any related processes
 echo -e "${BLUE}Cleaning up port 8888 and related processes...${NC}"
 
-# Kill any existing simple_api.py or uvicorn processes
+# Kill any existing simple_api.py, standalone_api.py or uvicorn processes
 pkill -9 -f "python.*simple_api.py" 2>/dev/null || true
+pkill -9 -f "python.*standalone_api.py" 2>/dev/null || true
 pkill -9 -f "uvicorn.*8888" 2>/dev/null || true
 pkill -9 -f "uvicorn.*app.main.*8888" 2>/dev/null || true
 
