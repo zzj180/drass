@@ -109,8 +109,16 @@ start_service() {
 
     # Check if service is already running on port
     if [ -n "$port" ] && lsof -i :$port >/dev/null 2>&1; then
-        echo -e "${YELLOW}$name is already running on port $port, skipping...${NC}"
-        return 0
+        echo -e "${YELLOW}$name is already running on port $port, checking if it's our service...${NC}"
+
+        # If it's the API service, kill the old process first
+        if [ "$port" == "8888" ]; then
+            echo -e "${BLUE}Killing old process on port 8888...${NC}"
+            lsof -i :8888 -t | xargs -r kill -9 2>/dev/null
+            sleep 2
+        else
+            return 0
+        fi
     fi
 
     echo -e "${BLUE}Starting $name...${NC}"
@@ -748,6 +756,21 @@ fi
 
 # Start Drass backend API
 echo -e "\n${BLUE}Starting Drass Backend API...${NC}"
+
+# First, clean up any stale processes on port 8888
+if lsof -i :8888 >/dev/null 2>&1; then
+    echo -e "${YELLOW}Port 8888 is in use, cleaning up old processes...${NC}"
+    # Try graceful kill first
+    lsof -ti :8888 | xargs -r kill 2>/dev/null
+    sleep 2
+    # Force kill if still running
+    if lsof -i :8888 >/dev/null 2>&1; then
+        lsof -ti :8888 | xargs -r kill -9 2>/dev/null
+        sleep 1
+    fi
+    echo -e "${GREEN}✓${NC} Port 8888 cleaned up"
+fi
+
 if ! check_service 8888 "Drass API" >/dev/null 2>&1; then
     # Setup environment configuration
     echo -e "${BLUE}Setting up environment configuration...${NC}"
