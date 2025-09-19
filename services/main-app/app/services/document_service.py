@@ -299,13 +299,34 @@ class DocumentService:
                 if doc.file_type in [DocumentType.TXT, DocumentType.MD]:
                     result['markdown'] = file_content.decode('utf-8', errors='ignore')
                 elif doc.file_type == DocumentType.PDF:
-                    # Try to extract text from PDF using PyPDF2
+                    # Try to extract text from PDF using available libraries
                     try:
                         import io
-                        from PyPDF2 import PdfReader
+                        pdf_reader = None
+                        pdf_library = None
 
-                        pdf_file = io.BytesIO(file_content)
-                        pdf_reader = PdfReader(pdf_file)
+                        # Try PyPDF2 first
+                        try:
+                            from PyPDF2 import PdfReader
+                            pdf_file = io.BytesIO(file_content)
+                            pdf_reader = PdfReader(pdf_file)
+                            pdf_library = "PyPDF2"
+                        except ImportError:
+                            pass
+
+                        # Try pypdf as alternative
+                        if pdf_reader is None:
+                            try:
+                                from pypdf import PdfReader
+                                pdf_file = io.BytesIO(file_content)
+                                pdf_reader = PdfReader(pdf_file)
+                                pdf_library = "pypdf"
+                            except ImportError:
+                                pass
+
+                        # If no PDF reader available, raise error
+                        if pdf_reader is None:
+                            raise ImportError("No PDF processing library available (install PyPDF2 or pypdf)")
 
                         text_content = []
                         page_count = len(pdf_reader.pages)

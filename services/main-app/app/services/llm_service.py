@@ -59,8 +59,16 @@ class LLMService:
                     return f"Error: LLM service returned status {response.status_code}"
                     
         except Exception as e:
-            logger.error(f"Error generating response: {e}")
-            return f"Error generating response: {str(e)}"
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Error generating response: {str(e)}\n{error_details}")
+            # Return a user-friendly error message
+            if "connection" in str(e).lower():
+                return "Error: Unable to connect to LLM service. Please check if the service is running."
+            elif "timeout" in str(e).lower():
+                return "Error: LLM service request timed out. Please try again."
+            else:
+                return f"Error generating response: {str(e)}"
     
     async def get_stats(self) -> Dict[str, Any]:
         """Get LLM service statistics"""
