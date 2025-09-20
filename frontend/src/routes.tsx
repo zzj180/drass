@@ -3,12 +3,15 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { CircularProgress, Box } from '@mui/material';
 
 // Components
-import { ChatInterface } from './components/ChatInterface/ChatInterface';
 import { Login } from './components/Login/Login';
 import { AccessLogs } from './components/KnowledgeBase/AccessLogs';
+import SimpleChatInterface from './components/SimpleChatInterface';
+import AuditLogs from './components/AuditLogs/AuditLogs';
 
 // Lazy loaded components
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard').then(m => ({ default: m.Dashboard || (() => <div>Dashboard</div>) })));
+const BedrockDashboard = lazy(() => import('./pages/BedrockDashboard'));
+const DocumentDashboard = lazy(() => import('./components/DocumentDashboard/DocumentDashboard').then(m => ({ default: m.default || (() => <div>Document Dashboard</div>) })));
 const KnowledgeBase = lazy(() => import('./components/KnowledgeBase/KnowledgeBase').then(m => ({ default: m.KnowledgeBase || (() => <div>Knowledge Base</div>) })));
 const Settings = lazy(() => import('./components/Settings/Settings').then(m => ({ default: m.Settings || (() => <div>Settings</div>) })));
 
@@ -49,7 +52,7 @@ const AppRoutes: React.FC = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <ChatInterface />
+              <Navigate to="/chat" replace />
             </ProtectedRoute>
           }
         />
@@ -58,7 +61,16 @@ const AppRoutes: React.FC = () => {
           path="/chat"
           element={
             <ProtectedRoute>
-              <ChatInterface />
+              <SimpleChatInterface />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/audit-logs"
+          element={
+            <ProtectedRoute>
+              <AuditLogs />
             </ProtectedRoute>
           }
         />
@@ -67,7 +79,7 @@ const AppRoutes: React.FC = () => {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <DocumentDashboard />
             </ProtectedRoute>
           }
         />

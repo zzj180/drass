@@ -5,6 +5,7 @@ Document management service
 import os
 import hashlib
 import logging
+import json
 from typing import Optional, List, Dict, Any, BinaryIO
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -41,7 +42,14 @@ class DocumentService:
     def __init__(self):
         self._initialized = False
         self.doc_processor_url = getattr(settings, 'DOC_PROCESSOR_URL', 'http://localhost:8004')
-        self.storage_path = getattr(settings, 'STORAGE_PATH', './data/uploads')
+        # Use absolute path to ensure consistency
+        storage_path = getattr(settings, 'STORAGE_PATH', './data/uploads')
+        if not os.path.isabs(storage_path):
+            # Convert relative path to absolute path
+            base_dir = Path(__file__).parent.parent.parent.parent  # Go up to project root
+            self.storage_path = str(base_dir / storage_path)
+        else:
+            self.storage_path = storage_path
         self.allowed_types = getattr(settings, 'ALLOWED_FILE_TYPES', [
             '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.md', '.csv', '.json', '.png', '.jpg', '.jpeg', '.gif', '.bmp'
         ])
@@ -50,6 +58,10 @@ class DocumentService:
         # In-memory storage for demo (should be replaced with database)
         self.documents: Dict[UUID, Document] = {}
         self.folders: Dict[UUID, DocumentFolder] = {}
+        
+        # Persistence file paths
+        self.documents_file = Path(self.storage_path) / "documents.json"
+        self.folders_file = Path(self.storage_path) / "folders.json"
     
     async def initialize(self):
         """Initialize document service"""
@@ -69,8 +81,13 @@ class DocumentService:
             except Exception as e:
                 logger.warning(f"Document processor service not available: {e}")
             
+            # Load persisted data
+            await self._load_persisted_data()
+            
             self._initialized = True
-            logger.info("Document service initialized")
+            logger.info(f"Document service initialized with storage path: {self.storage_path}")
+            logger.info(f"Documents file: {self.documents_file}")
+            logger.info(f"Folders file: {self.folders_file}")
     
     def _get_file_type(self, filename: str, mime_type: str) -> DocumentType:
         """Determine document type from filename and mime type"""
@@ -210,6 +227,9 @@ class DocumentService:
         # Store in memory (should be database)
         self.documents[doc_id] = document
         
+        # Save to persistence
+        await self._save_documents()
+        
         # Auto-process if requested
         if auto_process:
             # Process asynchronously (in production, use task queue)
@@ -242,6 +262,15 @@ class DocumentService:
         
         if doc.status == DocumentStatus.PROCESSING:
             raise ValueError("Document is already being processed")
+        
+        # Create default processing request if none provided
+        if processing_request is None:
+            processing_request = DocumentProcessingRequest(
+                chunk_size=settings.CHUNK_SIZE,
+                chunk_overlap=settings.CHUNK_OVERLAP,
+                extract_metadata=True,
+                language="auto"
+            )
         
         # Update status
         doc.status = DocumentStatus.PROCESSING
@@ -367,7 +396,7 @@ class DocumentService:
                     vector_ids = await vector_store_service.add_documents(
                         texts=[chunk['text'] for chunk in chunks],
                         metadatas=[{
-                            'document_id': str(doc_id),
+                            'document_id': str(document_id),
                             'chunk_index': i,
                             'filename': doc.filename,
                             'user_id': user_id,
@@ -464,8 +493,15 @@ class DocumentService:
     
     async def delete_document(self, user_id: str, document_id: UUID) -> bool:
         """Delete a document"""
+        logger.info(f"Attempting to delete document {document_id} for user {user_id}")
+        logger.info(f"Available documents: {list(self.documents.keys())}")
+        
         doc = self.documents.get(document_id)
-        if not doc or doc.user_id != user_id:
+        if not doc:
+            logger.warning(f"Document {document_id} not found in memory")
+            return False
+        if doc.user_id != user_id:
+            logger.warning(f"Document {document_id} belongs to user {doc.user_id}, not {user_id}")
             return False
         
         try:
@@ -478,6 +514,9 @@ class DocumentService:
             
             # Delete from memory (should be database)
             del self.documents[document_id]
+            
+            # Save to persistence
+            await self._save_documents()
             
             logger.info(f"Deleted document {document_id}")
             return True
@@ -527,6 +566,9 @@ class DocumentService:
         
         # Store in memory (should be database)
         self.folders[folder.id] = folder
+        
+        # Save to persistence
+        await self._save_folders()
         
         logger.info(f"Created folder {folder.id} for user {user_id}")
         return folder
@@ -592,6 +634,102 @@ class DocumentService:
         doc.updated_at = datetime.utcnow()
         
         return DocumentResponse.model_validate(doc)
+    
+    async def _load_persisted_data(self):
+        """Load documents and folders from JSON files"""
+        try:
+            # Load documents
+            if self.documents_file.exists():
+                async with aiofiles.open(self.documents_file, 'r') as f:
+                    data = await f.read()
+                    documents_data = json.loads(data)
+                    for doc_id_str, doc_data in documents_data.items():
+                        doc_id = UUID(doc_id_str)
+                        # Convert datetime strings back to datetime objects
+                        if 'created_at' in doc_data:
+                            doc_data['created_at'] = datetime.fromisoformat(doc_data['created_at'])
+                        if 'updated_at' in doc_data:
+                            doc_data['updated_at'] = datetime.fromisoformat(doc_data['updated_at'])
+                        if 'processed_at' in doc_data and doc_data['processed_at']:
+                            doc_data['processed_at'] = datetime.fromisoformat(doc_data['processed_at'])
+                        
+                        self.documents[doc_id] = Document(**doc_data)
+                    logger.info(f"Loaded {len(self.documents)} documents from persistence")
+            
+            # Load folders
+            if self.folders_file.exists():
+                async with aiofiles.open(self.folders_file, 'r') as f:
+                    data = await f.read()
+                    folders_data = json.loads(data)
+                    for folder_id_str, folder_data in folders_data.items():
+                        folder_id = UUID(folder_id_str)
+                        # Convert datetime strings back to datetime objects
+                        if 'created_at' in folder_data:
+                            folder_data['created_at'] = datetime.fromisoformat(folder_data['created_at'])
+                        if 'updated_at' in folder_data:
+                            folder_data['updated_at'] = datetime.fromisoformat(folder_data['updated_at'])
+                        
+                        self.folders[folder_id] = DocumentFolder(**folder_data)
+                    logger.info(f"Loaded {len(self.folders)} folders from persistence")
+                    
+        except Exception as e:
+            logger.error(f"Failed to load persisted data: {e}")
+    
+    async def _save_documents(self):
+        """Save documents to JSON file"""
+        try:
+            # Convert documents to serializable format
+            documents_data = {}
+            for doc_id, doc in self.documents.items():
+                doc_dict = doc.model_dump()
+                # Convert UUID objects to strings
+                if 'id' in doc_dict:
+                    doc_dict['id'] = str(doc_dict['id'])
+                if 'folder_id' in doc_dict and doc_dict['folder_id']:
+                    doc_dict['folder_id'] = str(doc_dict['folder_id'])
+                # Convert datetime objects to ISO strings
+                if 'created_at' in doc_dict:
+                    doc_dict['created_at'] = doc_dict['created_at'].isoformat()
+                if 'updated_at' in doc_dict:
+                    doc_dict['updated_at'] = doc_dict['updated_at'].isoformat()
+                if 'processed_at' in doc_dict and doc_dict['processed_at']:
+                    doc_dict['processed_at'] = doc_dict['processed_at'].isoformat()
+                
+                documents_data[str(doc_id)] = doc_dict
+            
+            logger.info(f"Saving documents to: {self.documents_file}")
+            async with aiofiles.open(self.documents_file, 'w') as f:
+                await f.write(json.dumps(documents_data, indent=2))
+            logger.info(f"Successfully saved {len(documents_data)} documents")
+                
+        except Exception as e:
+            logger.error(f"Failed to save documents: {e}")
+    
+    async def _save_folders(self):
+        """Save folders to JSON file"""
+        try:
+            # Convert folders to serializable format
+            folders_data = {}
+            for folder_id, folder in self.folders.items():
+                folder_dict = folder.model_dump()
+                # Convert UUID objects to strings
+                if 'id' in folder_dict:
+                    folder_dict['id'] = str(folder_dict['id'])
+                if 'parent_id' in folder_dict and folder_dict['parent_id']:
+                    folder_dict['parent_id'] = str(folder_dict['parent_id'])
+                # Convert datetime objects to ISO strings
+                if 'created_at' in folder_dict:
+                    folder_dict['created_at'] = folder_dict['created_at'].isoformat()
+                if 'updated_at' in folder_dict:
+                    folder_dict['updated_at'] = folder_dict['updated_at'].isoformat()
+                
+                folders_data[str(folder_id)] = folder_dict
+            
+            async with aiofiles.open(self.folders_file, 'w') as f:
+                await f.write(json.dumps(folders_data, indent=2))
+                
+        except Exception as e:
+            logger.error(f"Failed to save folders: {e}")
 
 
 # Singleton instance

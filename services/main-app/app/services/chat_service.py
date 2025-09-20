@@ -21,8 +21,14 @@ class ChatService:
     def _initialize_chain(self):
         """Initialize the RAG chain"""
         try:
-            self.rag_chain = ComplianceRAGChain()
-            logger.info("RAG chain initialized successfully")
+            # Import vector store service
+            from app.services.vector_store import vector_store_service
+            
+            # Initialize RAG chain with vector store
+            self.rag_chain = ComplianceRAGChain(
+                vector_store=vector_store_service.vector_store
+            )
+            logger.info("RAG chain initialized successfully with vector store")
         except Exception as e:
             logger.error(f"Failed to initialize RAG chain: {e}")
             # Continue without RAG chain for now

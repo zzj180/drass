@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端API调试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .input-area { margin: 10px 0; }
+        .input-area input { width: 60%; padding: 10px; }
+        .input-area button { padding: 10px 20px; margin-left: 10px; }
+        .response { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>前端API调试工具</h1>
+        
+        <div class="test-section">
+            <h2>1. 环境变量检查</h2>
+            <div id="env-info"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. API连接测试</h2>
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="输入测试消息..." value="你好，前端测试" />
+                <button onclick="testDirectAPI()">直接API调用</button>
+                <button onclick="testViteAPI()">Vite环境API调用</button>
+            </div>
+            <div id="api-response" class="response"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. 网络连接检查</h2>
+            <button onclick="checkConnectivity()">检查连接</button>
+            <div id="connectivity-response" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        // 显示环境信息
+        document.addEventListener('DOMContentLoaded', function() {
+            const envInfo = document.getElementById('env-info');
+            envInfo.innerHTML = `
+                <p><strong>当前页面URL:</strong> ${window.location.href}</p>
+                <p><strong>Origin:</strong> ${window.location.origin}</p>
+                <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+            `;
+        });
+
+        // 直接API调用（类似test-api.html）
+        async function testDirectAPI() {
+            const responseDiv = document.getElementById('api-response');
+            const message = document.getElementById('messageInput').value.trim();
+            
+            if (!message) {
+                responseDiv.innerHTML = '<div class="error">请输入测试消息</div>';
+                return;
+            }
+            
+            responseDiv.innerHTML = '正在测试直接API调用...';
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/test/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        use_rag: false
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    responseDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ 直接API调用成功</h4>
+                            <p><strong>问题:</strong> ${data.message}</p>
+                            <p><strong>回答:</strong> ${data.response.substring(0, 200)}...</p>
+                        </div>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `<div class="error">❌ API返回错误: ${JSON.stringify(data)}</div>`;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="error">❌ 网络错误: ${error.message}</div>`;
+            }
+        }
+
+        // 模拟Vite环境的API调用
+        async function testViteAPI() {
+            const responseDiv = document.getElementById('api-response');
+            const message = document.getElementById('messageInput').value.trim();
+            
+            if (!message) {
+                responseDiv.innerHTML = '<div class="error">请输入测试消息</div>';
+                return;
+            }
+            
+            responseDiv.innerHTML = '正在测试Vite环境API调用...';
+            
+            try {
+                // 模拟前端代码中的API_BASE_URL逻辑
+                const API_BASE_URL = 'http://localhost:8888/api/v1';
+                
+                const response = await fetch(`${API_BASE_URL}/test/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        use_rag: true,
+                        context: undefined
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const content = data.response || '';
+                
+                responseDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Vite环境API调用成功</h4>
+                        <p><strong>API_BASE_URL:</strong> ${API_BASE_URL}</p>
+                        <p><strong>问题:</strong> ${data.message}</p>
+                        <p><strong>回答:</strong> ${content.substring(0, 200)}...</p>
+                        <p><strong>使用RAG:</strong> ${data.used_rag ? '是' : '否'}</p>
+                    </div>
+                `;
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="error">❌ Vite环境API调用失败: ${error.message}</div>`;
+            }
+        }
+
+        // 检查网络连接
+        async function checkConnectivity() {
+            const responseDiv = document.getElementById('connectivity-response');
+            responseDiv.innerHTML = '正在检查连接...';
+            
+            const tests = [
+                { name: '后端健康检查', url: 'http://localhost:8888/health' },
+                { name: 'VLLM服务检查', url: 'http://localhost:8001/v1/models' },
+                { name: '前端服务检查', url: 'http://localhost:5173' }
+            ];
+            
+            let results = [];
+            
+            for (const test of tests) {
+                try {
+                    const response = await fetch(test.url, { method: 'GET' });
+                    results.push(`✅ ${test.name}: OK (${response.status})`);
+                } catch (error) {
+                    results.push(`❌ ${test.name}: 失败 - ${error.message}`);
+                }
+            }
+            
+            responseDiv.innerHTML = `
+                <h4>连接检查结果:</h4>
+                ${results.map(result => `<p>${result}</p>`).join('')}
+            `;
+        }
+        
+        // 回车发送
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                testDirectAPI();
+            }
+        });
+    </script>
+</body>
+</html>

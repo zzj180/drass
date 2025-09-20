@@ -190,11 +190,24 @@ class ComplianceRAGChain:
         """
         query = inputs.get("query", "")
         
-        # For now, return a simple response using the LLM directly
+        # Check if we have a vector store and knowledge base
+        if self.vector_store and hasattr(self, 'retriever') and self.retriever:
+            try:
+                # Use RAG with knowledge base
+                if self.qa_chain:
+                    result = await self.qa_chain.ainvoke({"query": query})
+                    return {
+                        "answer": result.get("answer", ""),
+                        "sources": result.get("source_documents", [])
+                    }
+            except Exception as e:
+                logger.warning(f"RAG chain failed, falling back to direct LLM: {e}")
+        
+        # Fallback: Use LLM directly without RAG prompts
         try:
             from app.services.llm_service import llm_service
             
-            response = await llm_service.generate(query, max_tokens=500)
+            response = await llm_service.generate(query, max_tokens=2048)
             
             return {
                 "answer": response,

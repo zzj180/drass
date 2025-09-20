@@ -1,0 +1,29 @@
+{
+  "267c3831-c4ab-42d4-8490-1d0f23a10faf": {
+    "filename": "test-persistence.md",
+    "file_type": "md",
+    "file_size": 22,
+    "mime_type": "application/octet-stream",
+    "folder_id": null,
+    "tags": [],
+    "description": null,
+    "metadata": {},
+    "id": "267c3831-c4ab-42d4-8490-1d0f23a10faf",
+    "user_id": "test-user-id",
+    "status": "pending",
+    "storage_location": "local",
+    "storage_path": "./data/uploads/test-user-id/2025/09/20/267c3831-c4ab-42d4-8490-1d0f23a10faf.md",
+    "checksum": "0a7eaee1812bceb1f27e23cd8bbfe46fd44f021ab9b1d8e737ff3ac717591aa5",
+    "extracted_text": null,
+    "page_count": null,
+    "word_count": null,
+    "language": null,
+    "vector_ids": [],
+    "chunk_count": null,
+    "created_at": "2025-09-20T16:35:31.574102",
+    "updated_at": "2025-09-20T16:35:31.574103",
+    "processed_at": null,
+    "error_message": null,
+    "retry_count": 0
+  }
+}

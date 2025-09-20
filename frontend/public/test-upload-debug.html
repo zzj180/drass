@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档上传调试工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .button:hover { background: #0056b3; }
+        .button:disabled { background: #ccc; cursor: not-allowed; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .warning { background: #fff3cd; color: #856404; }
+        .form-group { margin: 10px 0; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .file-info { background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>文档上传调试工具</h1>
+    
+    <div class="form-group">
+        <label for="email">邮箱:</label>
+        <input type="email" id="email" value="test@example.com">
+    </div>
+    
+    <div class="form-group">
+        <label for="password">密码:</label>
+        <input type="password" id="password" value="testpassword123">
+    </div>
+    
+    <button class="button" onclick="login()">登录</button>
+    <button class="button" onclick="checkAuth()">检查认证状态</button>
+    <button class="button" onclick="clearAuth()">清除认证</button>
+    
+    <hr>
+    
+    <div class="form-group">
+        <label for="fileInput">选择文件:</label>
+        <input type="file" id="fileInput" accept=".md,.txt,.pdf,.docx">
+    </div>
+    
+    <button class="button" onclick="uploadFile()">上传文件</button>
+    <button class="button" onclick="testUploadAPI()">测试上传API</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        function showResult(message, type = 'info') {
+            const resultDiv = document.getElementById('result');
+            const timestamp = new Date().toLocaleTimeString();
+            resultDiv.innerHTML = `
+                <div class="status ${type}">
+                    <strong>[${timestamp}]</strong> ${message}
+                </div>
+            `;
+        }
+        
+        async function login() {
+            try {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                if (!email || !password) {
+                    throw new Error('请输入邮箱和密码');
+                }
+                
+                const formData = new FormData();
+                formData.append('username', email);
+                formData.append('password', password);
+                
+                const response = await fetch('http://localhost:8888/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(`登录失败: ${errorData.detail || response.statusText}`);
+                }
+                
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                
+                showResult(`✅ 登录成功: ${email}`, 'success');
+            } catch (error) {
+                showResult(`❌ 登录失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                showResult(`✅ Token存在: ${token.substring(0, 50)}...`, 'success');
+            } else {
+                showResult('❌ 没有找到Token', 'error');
+            }
+        }
+        
+        function clearAuth() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            showResult('🗑️ 认证信息已清除', 'info');
+        }
+        
+        async function testUploadAPI() {
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('请先登录');
+                }
+                
+                // 创建一个测试文件
+                const testContent = '测试文档内容\n这是用于测试上传功能的文档。';
+                const testFile = new File([testContent], 'test-upload.md', { type: 'text/markdown' });
+                
+                const formData = new FormData();
+                formData.append('file', testFile);
+                formData.append('auto_process', 'true');
+                
+                showResult('🔄 正在测试上传API...', 'info');
+                
+                const response = await fetch('http://localhost:8888/api/v1/documents/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(`上传失败: ${errorData.detail || response.statusText} (状态码: ${response.status})`);
+                }
+                
+                const result = await response.json();
+                showResult(`✅ 上传成功: ${result.name} (ID: ${result.id})`, 'success');
+                
+            } catch (error) {
+                showResult(`❌ 上传失败: ${error.message}`, 'error');
+            }
+        }
+        
+        async function uploadFile() {
+            try {
+                const fileInput = document.getElementById('fileInput');
+                const file = fileInput.files[0];
+                
+                if (!file) {
+                    throw new Error('请选择一个文件');
+                }
+                
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('请先登录');
+                }
+                
+                showResult(`🔄 正在上传文件: ${file.name} (${(file.size / 1024).toFixed(2)} KB)...`, 'info');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('auto_process', 'true');
+                
+                const response = await fetch('http://localhost:8888/api/v1/documents/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(`上传失败: ${errorData.detail || response.statusText} (状态码: ${response.status})`);
+                }
+                
+                const result = await response.json();
+                showResult(`✅ 上传成功: ${result.name} (ID: ${result.id})`, 'success');
+                
+            } catch (error) {
+                showResult(`❌ 上传失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 页面加载时检查认证状态
+        window.onload = function() {
+            checkAuth();
+        };
+    </script>
+</body>
+</html>

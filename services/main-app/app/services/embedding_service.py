@@ -26,14 +26,17 @@ class EmbeddingService:
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for texts"""
         try:
+            headers = {"Authorization": "Bearer 123456", "Content-Type": "application/json"}
             response = requests.post(
                 f"{self.api_base}/embeddings",
-                json={"texts": texts}
+                json={"input": texts, "model": "Qwen3-Embedding-8B"},
+                headers=headers
             )
             if response.status_code == 200:
-                return response.json()["embeddings"]
+                data = response.json()
+                return [item["embedding"] for item in data["data"]]
             else:
-                logger.error(f"Embedding service error: {response.status_code}")
+                logger.error(f"Embedding service error: {response.status_code} - {response.text}")
                 return []
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
@@ -47,9 +50,11 @@ class EmbeddingService:
     async def get_stats(self) -> Dict[str, Any]:
         """Get embedding service statistics"""
         try:
-            response = requests.get(f"{self.api_base}/health")
+            # Use models endpoint to check if service is healthy
+            headers = {"Authorization": "Bearer 123456"}
+            response = requests.get(f"{self.api_base}/models", headers=headers)
             if response.status_code == 200:
-                return response.json()
+                return {"status": "healthy", "models": response.json()}
             else:
                 return {"status": "error", "code": response.status_code}
         except Exception as e:

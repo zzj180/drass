@@ -1,66 +1,57 @@
 import { PaletteOptions } from '@mui/material/styles';
+import { bedrockColors, bedrockDarkColors } from './bedrock/colors';
 
 /**
  * Color palette configuration for the application
+ * Enhanced with Bedrock Data Compliance System colors
  */
 export const lightPalette: PaletteOptions = {
   mode: 'light',
   primary: {
-    main: '#2563eb', // Blue-600
-    light: '#60a5fa', // Blue-400
-    dark: '#1e40af', // Blue-800
-    contrastText: '#ffffff',
+    main: bedrockColors.primary.main, // 磐石蓝
+    light: bedrockColors.primary.light,
+    dark: bedrockColors.primary.dark,
+    contrastText: bedrockColors.primary.contrastText,
   },
   secondary: {
-    main: '#8b5cf6', // Violet-500
-    light: '#a78bfa', // Violet-400
-    dark: '#6d28d9', // Violet-700
-    contrastText: '#ffffff',
+    main: bedrockColors.secondary.main, // 数据紫
+    light: bedrockColors.secondary.light,
+    dark: bedrockColors.secondary.dark,
+    contrastText: bedrockColors.secondary.contrastText,
   },
   error: {
-    main: '#ef4444', // Red-500
-    light: '#f87171', // Red-400
-    dark: '#dc2626', // Red-600
-    contrastText: '#ffffff',
+    main: bedrockColors.error.main, // 风险红
+    light: bedrockColors.error.light,
+    dark: bedrockColors.error.dark,
+    contrastText: bedrockColors.error.contrastText,
   },
   warning: {
-    main: '#f59e0b', // Amber-500
-    light: '#fbbf24', // Amber-400
-    dark: '#d97706', // Amber-600
-    contrastText: '#000000',
+    main: bedrockColors.warning.main, // 警告橙
+    light: bedrockColors.warning.light,
+    dark: bedrockColors.warning.dark,
+    contrastText: bedrockColors.warning.contrastText,
   },
   info: {
-    main: '#06b6d4', // Cyan-500
-    light: '#22d3ee', // Cyan-400
-    dark: '#0891b2', // Cyan-600
-    contrastText: '#ffffff',
+    main: bedrockColors.info.main, // 信息青
+    light: bedrockColors.info.light,
+    dark: bedrockColors.info.dark,
+    contrastText: bedrockColors.info.contrastText,
   },
   success: {
-    main: '#10b981', // Emerald-500
-    light: '#34d399', // Emerald-400
-    dark: '#059669', // Emerald-600
-    contrastText: '#ffffff',
+    main: bedrockColors.success.main, // 合规绿
+    light: bedrockColors.success.light,
+    dark: bedrockColors.success.dark,
+    contrastText: bedrockColors.success.contrastText,
   },
-  grey: {
-    50: '#f9fafb',
-    100: '#f3f4f6',
-    200: '#e5e7eb',
-    300: '#d1d5db',
-    400: '#9ca3af',
-    500: '#6b7280',
-    600: '#4b5563',
-    700: '#374151',
-    800: '#1f2937',
-    900: '#111827',
-  },
+  grey: bedrockColors.grey,
   background: {
-    default: '#f9fafb',
-    paper: '#ffffff',
+    default: bedrockColors.background.default,
+    paper: bedrockColors.background.paper,
   },
   text: {
-    primary: '#111827',
-    secondary: '#6b7280',
-    disabled: '#9ca3af',
+    primary: bedrockColors.text.primary,
+    secondary: bedrockColors.text.secondary,
+    disabled: bedrockColors.text.disabled,
   },
   divider: 'rgba(0, 0, 0, 0.08)',
   action: {
@@ -75,61 +66,50 @@ export const lightPalette: PaletteOptions = {
 export const darkPalette: PaletteOptions = {
   mode: 'dark',
   primary: {
-    main: '#60a5fa', // Blue-400
-    light: '#93c5fd', // Blue-300
-    dark: '#2563eb', // Blue-600
-    contrastText: '#000000',
+    main: bedrockDarkColors.primary.main, // 磐石蓝深色版
+    light: bedrockDarkColors.primary.light,
+    dark: bedrockDarkColors.primary.dark,
+    contrastText: bedrockDarkColors.primary.contrastText,
   },
   secondary: {
-    main: '#a78bfa', // Violet-400
-    light: '#c4b5fd', // Violet-300
-    dark: '#8b5cf6', // Violet-500
-    contrastText: '#000000',
+    main: bedrockDarkColors.secondary.main, // 数据紫深色版
+    light: bedrockDarkColors.secondary.light,
+    dark: bedrockDarkColors.secondary.dark,
+    contrastText: bedrockDarkColors.secondary.contrastText,
   },
   error: {
-    main: '#f87171', // Red-400
-    light: '#fca5a5', // Red-300
-    dark: '#ef4444', // Red-500
-    contrastText: '#000000',
+    main: bedrockDarkColors.error.main,
+    light: bedrockDarkColors.error.light,
+    dark: bedrockDarkColors.error.dark,
+    contrastText: bedrockDarkColors.error.contrastText,
   },
   warning: {
-    main: '#fbbf24', // Amber-400
-    light: '#fcd34d', // Amber-300
-    dark: '#f59e0b', // Amber-500
-    contrastText: '#000000',
+    main: bedrockDarkColors.warning.main,
+    light: bedrockDarkColors.warning.light,
+    dark: bedrockDarkColors.warning.dark,
+    contrastText: bedrockDarkColors.warning.contrastText,
   },
   info: {
-    main: '#22d3ee', // Cyan-400
-    light: '#67e8f9', // Cyan-300
-    dark: '#06b6d4', // Cyan-500
-    contrastText: '#000000',
+    main: bedrockDarkColors.info.main,
+    light: bedrockDarkColors.info.light,
+    dark: bedrockDarkColors.info.dark,
+    contrastText: bedrockDarkColors.info.contrastText,
   },
   success: {
-    main: '#34d399', // Emerald-400
-    light: '#6ee7b7', // Emerald-300
-    dark: '#10b981', // Emerald-500
-    contrastText: '#000000',
+    main: bedrockDarkColors.success.main,
+    light: bedrockDarkColors.success.light,
+    dark: bedrockDarkColors.success.dark,
+    contrastText: bedrockDarkColors.success.contrastText,
   },
-  grey: {
-    50: '#111827',
-    100: '#1f2937',
-    200: '#374151',
-    300: '#4b5563',
-    400: '#6b7280',
-    500: '#9ca3af',
-    600: '#d1d5db',
-    700: '#e5e7eb',
-    800: '#f3f4f6',
-    900: '#f9fafb',
-  },
+  grey: bedrockDarkColors.grey,
   background: {
-    default: '#0f172a',
-    paper: '#1e293b',
+    default: bedrockDarkColors.background.default,
+    paper: bedrockDarkColors.background.paper,
   },
   text: {
-    primary: '#f9fafb',
-    secondary: '#cbd5e1',
-    disabled: '#64748b',
+    primary: bedrockDarkColors.text.primary,
+    secondary: bedrockDarkColors.text.secondary,
+    disabled: bedrockDarkColors.text.disabled,
   },
   divider: 'rgba(255, 255, 255, 0.12)',
   action: {

@@ -2,6 +2,9 @@ import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { lightPalette, darkPalette } from './palette';
 import { typography } from './typography';
 import { components } from './components';
+import { bedrockColors, bedrockDarkColors } from './bedrock/colors';
+import { gradients } from './bedrock/gradients';
+import { durations, easings } from './bedrock/animations';
 
 /**
  * Create a theme instance with the specified mode
@@ -12,29 +15,45 @@ export const createAppTheme = (mode: 'light' | 'dark' = 'light') => {
     typography,
     components,
     shape: {
-      borderRadius: 8,
+      borderRadius: 12, // 增大圆角，更现代化
     },
     spacing: 8,
     transitions: {
       easing: {
-        easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
-        easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',
-        easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
-        sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
+        easeInOut: easings.easeInOut,
+        easeOut: easings.easeOut,
+        easeIn: easings.easeIn,
+        sharp: easings.sharp,
       },
       duration: {
-        shortest: 150,
-        shorter: 200,
-        short: 250,
-        standard: 300,
-        complex: 375,
-        enteringScreen: 225,
-        leavingScreen: 195,
+        shortest: durations.shortest,
+        shorter: durations.shorter,
+        short: durations.short,
+        standard: durations.standard,
+        complex: durations.complex,
+        enteringScreen: durations.enteringScreen,
+        leavingScreen: durations.leavingScreen,
       },
     },
   };
 
   return createTheme(themeOptions);
+};
+
+/**
+ * Create Bedrock theme instance with enhanced styling
+ */
+export const createBedrockTheme = (mode: 'light' | 'dark' = 'light') => {
+  const baseTheme = createAppTheme(mode);
+  
+  return createTheme({
+    ...baseTheme,
+    // 扩展主题以支持自定义属性
+    customPalette: {
+      bedrock: mode === 'light' ? bedrockColors : bedrockDarkColors,
+      gradients,
+    },
+  });
 };
 
 /**
@@ -48,6 +67,16 @@ export const lightTheme = createAppTheme('light');
 export const darkTheme = createAppTheme('dark');
 
 /**
- * Default theme export (light mode)
+ * Bedrock light theme
  */
-export const theme = lightTheme;
+export const bedrockLightTheme = createBedrockTheme('light');
+
+/**
+ * Bedrock dark theme
+ */
+export const bedrockDarkTheme = createBedrockTheme('dark');
+
+/**
+ * Default theme export (Bedrock light mode)
+ */
+export const theme = bedrockLightTheme;

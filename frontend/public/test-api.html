@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLLM API 测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .input-area { margin: 20px 0; }
+        .input-area input { width: 60%; padding: 10px; }
+        .input-area button { padding: 10px 20px; margin-left: 10px; }
+        .response { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VLLM API 直接测试</h1>
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="输入您的问题..." />
+            <button onclick="sendMessage()">发送</button>
+        </div>
+        <div id="response" class="response"></div>
+    </div>
+
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const responseDiv = document.getElementById('response');
+            const message = input.value.trim();
+            
+            if (!message) {
+                responseDiv.innerHTML = '<div class="error">请输入问题</div>';
+                return;
+            }
+            
+            responseDiv.innerHTML = '正在发送请求...';
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/test/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        use_rag: false
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    responseDiv.innerHTML = `
+                        <h3>问题：</h3>
+                        <p>${data.message}</p>
+                        <h3>VLLM回答：</h3>
+                        <pre>${data.response}</pre>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `<div class="error">错误：${JSON.stringify(data)}</div>`;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="error">网络错误：${error.message}</div>`;
+            }
+        }
+        
+        // 回车发送
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

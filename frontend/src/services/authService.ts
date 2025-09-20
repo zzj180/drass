@@ -184,8 +184,36 @@ class AuthService {
   // Get authorization headers
   getAuthHeaders(): HeadersInit {
     const token = this.getAccessToken();
+    if (!token || this.isTokenExpired()) {
+      return {};
+    }
+
+    return {
+      'Authorization': `Bearer ${token}`,
+    };
+  }
+
+  // Get authorization headers with automatic refresh
+  async getAuthHeadersWithRefresh(): Promise<HeadersInit> {
+    const token = this.getAccessToken();
     if (!token) {
       return {};
+    }
+
+    // Check if token is expired
+    if (this.isTokenExpired()) {
+      try {
+        await this.refreshToken();
+        const newToken = this.getAccessToken();
+        if (newToken) {
+          return {
+            'Authorization': `Bearer ${newToken}`,
+          };
+        }
+      } catch (error) {
+        console.error('Failed to refresh token:', error);
+        return {};
+      }
     }
 
     return {

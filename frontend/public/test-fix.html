@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复验证测试</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5;
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section { 
+            margin: 20px 0; 
+            padding: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 5px; 
+        }
+        .input-area { 
+            margin: 10px 0; 
+        }
+        .input-area input { 
+            width: 70%; 
+            padding: 10px; 
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .input-area button { 
+            padding: 10px 20px; 
+            margin-left: 10px; 
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .input-area button:hover {
+            background: #0056b3;
+        }
+        .response { 
+            margin: 10px 0; 
+            padding: 15px; 
+            background: #f8f9fa; 
+            border-radius: 5px; 
+            border-left: 4px solid #007bff;
+            white-space: pre-wrap;
+        }
+        .error { 
+            background: #ffebee; 
+            color: #c62828; 
+            border-left-color: #c62828;
+        }
+        .success { 
+            background: #e8f5e8; 
+            color: #2e7d32; 
+            border-left-color: #2e7d32;
+        }
+        h1 { color: #333; }
+        h2 { color: #666; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 修复验证测试</h1>
+        <p>这个页面用来验证VLLM修复是否成功，每次点击应该得到不同的回答。</p>
+        
+        <div class="test-section">
+            <h2>1. 测试 use_rag=false (直接VLLM)</h2>
+            <div class="input-area">
+                <input type="text" id="messageInput1" placeholder="输入测试消息..." value="测试一下数据合规助手的性能" />
+                <button onclick="testAPI(false, 'api-response1')">测试 RAG=false</button>
+            </div>
+            <div id="api-response1" class="response">点击按钮开始测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. 测试 use_rag=true (RAG链)</h2>
+            <div class="input-area">
+                <input type="text" id="messageInput2" placeholder="输入测试消息..." value="测试一下数据合规助手的性能" />
+                <button onclick="testAPI(true, 'api-response2')">测试 RAG=true</button>
+            </div>
+            <div id="api-response2" class="response">点击按钮开始测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. 多次测试验证随机性</h2>
+            <div class="input-area">
+                <button onclick="multipleTests()">连续测试3次 (RAG=false)</button>
+            </div>
+            <div id="multiple-results" class="response">点击按钮开始连续测试...</div>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI(useRag, responseElementId) {
+            const messageInput = document.getElementById(useRag ? 'messageInput2' : 'messageInput1');
+            const responseDiv = document.getElementById(responseElementId);
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                responseDiv.innerHTML = '<div class="error">请输入测试消息</div>';
+                return;
+            }
+            
+            responseDiv.innerHTML = `正在测试 use_rag=${useRag}...`;
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/test/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        use_rag: useRag
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    responseDiv.className = 'response success';
+                    responseDiv.innerHTML = `✅ 测试成功 (use_rag=${useRag})
+时间: ${new Date().toLocaleTimeString()}
+消息: ${data.message}
+使用RAG: ${data.used_rag}
+
+回答:
+${data.response}`;
+                } else {
+                    responseDiv.className = 'response error';
+                    responseDiv.innerHTML = `❌ API返回错误: ${JSON.stringify(data)}`;
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.innerHTML = `❌ 网络错误: ${error.message}`;
+            }
+        }
+
+        async function multipleTests() {
+            const resultsDiv = document.getElementById('multiple-results');
+            resultsDiv.innerHTML = '正在进行连续测试...';
+            
+            const results = [];
+            const testMessage = "你好";
+            
+            for (let i = 1; i <= 3; i++) {
+                try {
+                    const response = await fetch('http://localhost:8888/api/v1/test/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: testMessage,
+                            use_rag: false
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        results.push(`测试 ${i}: ${data.response.substring(0, 100)}...`);
+                    } else {
+                        results.push(`测试 ${i}: 错误 - ${JSON.stringify(data)}`);
+                    }
+                } catch (error) {
+                    results.push(`测试 ${i}: 网络错误 - ${error.message}`);
+                }
+                
+                // 等待1秒再进行下一次测试
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            resultsDiv.className = 'response success';
+            resultsDiv.innerHTML = `✅ 连续测试完成:
+
+${results.join('\n\n')}
+
+${results.length === 3 && results[0] !== results[1] && results[1] !== results[2] 
+    ? '🎉 验证成功：每次回答都不同！' 
+    : '⚠️  注意：某些回答可能相同'}`;
+        }
+
+        // 页面加载时自动运行一次测试
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                testAPI(false, 'api-response1');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

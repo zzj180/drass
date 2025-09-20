@@ -1,0 +1,16 @@
+[Unit]
+Description=Drass API Service
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=qwkj
+WorkingDirectory=/home/qwkj/drass/services/main-app
+Environment="PATH=/home/qwkj/.pyenv/shims:/home/qwkj/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="NO_PROXY=localhost,127.0.0.1,::1,0.0.0.0"
+ExecStart=/home/qwkj/drass/services/main-app/start_api_no_proxy.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

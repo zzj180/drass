@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Document Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: #f9f9f9;
+            margin: 20px 0;
+        }
+        .upload-area:hover {
+            border-color: #666;
+            background: #f0f0f0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #fileList {
+            margin-top: 20px;
+            text-align: left;
+        }
+        .file-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Document Upload Test</h1>
+    
+    <div class="upload-area" id="dropZone">
+        <p>Drag and drop files here or click to select</p>
+        <input type="file" id="fileInput" multiple style="display: none;">
+        <button onclick="document.getElementById('fileInput').click()">Select Files</button>
+    </div>
+    
+    <div id="fileList"></div>
+    
+    <button onclick="uploadFiles()">Upload All Files</button>
+    <button onclick="testAPI()">Test API Connection</button>
+    <button onclick="getDocuments()">Get Documents List</button>
+    
+    <div id="result"></div>
+    
+    <h2>Documents List</h2>
+    <div id="documentsList"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8888/api/v1';
+        let selectedFiles = [];
+        
+        // Setup drag and drop
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#333';
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+        
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            displayFiles();
+        }
+        
+        function displayFiles() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '<h3>Selected Files:</h3>';
+            selectedFiles.forEach((file, index) => {
+                fileList.innerHTML += `
+                    <div class="file-item">
+                        ${file.name} (${(file.size / 1024).toFixed(2)} KB)
+                    </div>
+                `;
+            });
+        }
+        
+        function showResult(message, isError = false) {
+            const result = document.getElementById('result');
+            result.textContent = message;
+            result.className = isError ? 'error' : 'success';
+            result.style.display = 'block';
+        }
+        
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:8888/health');
+                const data = await response.json();
+                showResult('API Connection Successful! Status: ' + data.status);
+                console.log('API Response:', data);
+            } catch (error) {
+                showResult('API Connection Failed: ' + error.message, true);
+                console.error('Error:', error);
+            }
+        }
+        
+        async function uploadFiles() {
+            if (selectedFiles.length === 0) {
+                showResult('Please select files to upload', true);
+                return;
+            }
+            
+            for (const file of selectedFiles) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        showResult(`Successfully uploaded: ${file.name}`);
+                        console.log('Upload response:', data);
+                    } else {
+                        const error = await response.text();
+                        showResult(`Failed to upload ${file.name}: ${error}`, true);
+                    }
+                } catch (error) {
+                    showResult(`Error uploading ${file.name}: ${error.message}`, true);
+                    console.error('Upload error:', error);
+                }
+            }
+            
+            // Refresh documents list after upload
+            setTimeout(getDocuments, 1000);
+        }
+        
+        async function getDocuments() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/documents/`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    displayDocuments(data);
+                    showResult(`Found ${data.length || 0} documents`);
+                } else {
+                    const error = await response.text();
+                    showResult(`Failed to get documents: ${error}`, true);
+                }
+            } catch (error) {
+                showResult(`Error getting documents: ${error.message}`, true);
+                console.error('Error:', error);
+            }
+        }
+        
+        function displayDocuments(documents) {
+            const documentsList = document.getElementById('documentsList');
+            if (!documents || documents.length === 0) {
+                documentsList.innerHTML = '<p>No documents found</p>';
+                return;
+            }
+            
+            documentsList.innerHTML = documents.map(doc => `
+                <div class="file-item">
+                    <strong>${doc.name}</strong><br>
+                    Size: ${(doc.size / 1024).toFixed(2)} KB<br>
+                    Status: ${doc.status}<br>
+                    Uploaded: ${new Date(doc.uploadedAt).toLocaleString()}
+                </div>
+            `).join('');
+        }
+        
+        // Test API on page load
+        window.onload = () => {
+            testAPI();
+            getDocuments();
+        };
+    </script>
+</body>
+</html>

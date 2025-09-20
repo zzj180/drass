@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端API测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input[type="text"] { width: 300px; padding: 8px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>前端API连接测试</h1>
+        
+        <div class="test-section">
+            <h2>1. 后端健康检查</h2>
+            <button onclick="testHealth()">测试后端健康状态</button>
+            <div id="health-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. VLLM服务状态</h2>
+            <button onclick="testVLLM()">测试VLLM服务</button>
+            <div id="vllm-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. 聊天API测试</h2>
+            <input type="text" id="chat-input" placeholder="输入测试消息" value="你好，请介绍一下自己">
+            <button onclick="testChat()">发送聊天消息</button>
+            <div id="chat-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>4. 服务状态总览</h2>
+            <button onclick="testAllServices()">测试所有服务</button>
+            <div id="all-services-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '正在测试...';
+            
+            try {
+                const response = await fetch('http://localhost:8888/health');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ 后端健康检查通过<br>状态: ${data.status}<br>服务: ${JSON.stringify(data.services, null, 2)}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 后端健康检查失败: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 连接错误: ${error.message}</div>`;
+            }
+        }
+        
+        async function testVLLM() {
+            const resultDiv = document.getElementById('vllm-result');
+            resultDiv.innerHTML = '正在测试VLLM服务...';
+            
+            try {
+                const response = await fetch('http://localhost:8001/v1/models', {
+                    headers: {
+                        'Authorization': 'Bearer 123456'
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ VLLM服务正常<br>模型: ${JSON.stringify(data.data, null, 2)}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ VLLM服务错误: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ VLLM连接错误: ${error.message}</div>`;
+            }
+        }
+        
+        async function testChat() {
+            const resultDiv = document.getElementById('chat-result');
+            const message = document.getElementById('chat-input').value;
+            resultDiv.innerHTML = '正在发送聊天消息...';
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/test/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        use_rag: false
+                    })
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ 聊天API正常<br>消息: ${data.message}<br>回复: ${data.response}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 聊天API错误: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 聊天连接错误: ${error.message}</div>`;
+            }
+        }
+        
+        async function testAllServices() {
+            const resultDiv = document.getElementById('all-services-result');
+            resultDiv.innerHTML = '正在测试所有服务...';
+            
+            const results = [];
+            
+            // 测试后端健康
+            try {
+                const healthResponse = await fetch('http://localhost:8888/health');
+                const healthData = await healthResponse.json();
+                results.push(`✅ 后端API: ${healthResponse.ok ? '正常' : '异常'}`);
+            } catch (error) {
+                results.push(`❌ 后端API: 连接失败`);
+            }
+            
+            // 测试VLLM
+            try {
+                const vllmResponse = await fetch('http://localhost:8001/v1/models', {
+                    headers: { 'Authorization': 'Bearer 123456' }
+                });
+                results.push(`✅ VLLM服务: ${vllmResponse.ok ? '正常' : '异常'}`);
+            } catch (error) {
+                results.push(`❌ VLLM服务: 连接失败`);
+            }
+            
+            // 测试前端
+            try {
+                const frontendResponse = await fetch('http://localhost:5173');
+                results.push(`✅ 前端服务: ${frontendResponse.ok ? '正常' : '异常'}`);
+            } catch (error) {
+                results.push(`❌ 前端服务: 连接失败`);
+            }
+            
+            // 测试聊天API
+            try {
+                const chatResponse = await fetch('http://localhost:8888/api/v1/test/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: '测试', use_rag: false })
+                });
+                results.push(`✅ 聊天API: ${chatResponse.ok ? '正常' : '异常'}`);
+            } catch (error) {
+                results.push(`❌ 聊天API: 连接失败`);
+            }
+            
+            resultDiv.innerHTML = `<div class="success">${results.join('<br>')}</div>`;
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            testAllServices();
+        };
+    </script>
+</body>
+</html>

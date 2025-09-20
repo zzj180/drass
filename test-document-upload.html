@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档上传测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .button.danger {
+            background-color: #dc3545;
+        }
+        .button.danger:hover {
+            background-color: #c82333;
+        }
+        .file-input {
+            margin: 10px 0;
+        }
+        .document-list {
+            margin: 10px 0;
+        }
+        .document-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #eee;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>文档上传和删除功能测试</h1>
+    
+    <div class="section">
+        <h2>1. 登录</h2>
+        <button class="button" onclick="login()">登录测试用户</button>
+        <div id="login-status"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. 获取文档列表</h2>
+        <button class="button" onclick="loadDocuments()">加载文档列表</button>
+        <div id="documents-list" class="document-list"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. 上传文档</h2>
+        <input type="file" id="file-input" class="file-input" accept=".pdf,.doc,.docx,.txt,.md">
+        <button class="button" onclick="uploadDocument()">上传文档</button>
+        <div id="upload-status"></div>
+    </div>
+    
+    <div class="section">
+        <h2>4. 测试结果</h2>
+        <div id="test-results"></div>
+    </div>
+
+    <script>
+        let accessToken = null;
+        
+        async function login() {
+            try {
+                const formData = new FormData();
+                formData.append('username', 'test@example.com');
+                formData.append('password', 'testpassword123');
+                
+                const response = await fetch('http://localhost:8888/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                accessToken = data.access_token;
+                localStorage.setItem('access_token', accessToken);
+                
+                document.getElementById('login-status').innerHTML = 
+                    '<div class="status success">登录成功！Token已保存</div>';
+                
+                logResult('登录测试', '成功', '已获取访问令牌');
+            } catch (error) {
+                document.getElementById('login-status').innerHTML = 
+                    `<div class="status error">登录失败: ${error.message}</div>`;
+                logResult('登录测试', '失败', error.message);
+            }
+        }
+        
+        async function loadDocuments() {
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('请先登录');
+                }
+                
+                const response = await fetch('http://localhost:8888/api/v1/documents/', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const documents = await response.json();
+                
+                const listDiv = document.getElementById('documents-list');
+                if (documents.length === 0) {
+                    listDiv.innerHTML = '<div class="status info">暂无文档</div>';
+                } else {
+                    listDiv.innerHTML = documents.map(doc => `
+                        <div class="document-item">
+                            <div>
+                                <strong>${doc.name}</strong> (${doc.type}, ${formatFileSize(doc.size)})
+                                <div class="status ${doc.status === 'completed' ? 'success' : 'info'}">${doc.status}</div>
+                            </div>
+                            <button class="button danger" onclick="deleteDocument('${doc.id}')">删除</button>
+                        </div>
+                    `).join('');
+                }
+                
+                logResult('加载文档列表', '成功', `找到 ${documents.length} 个文档`);
+            } catch (error) {
+                document.getElementById('documents-list').innerHTML = 
+                    `<div class="status error">加载失败: ${error.message}</div>`;
+                logResult('加载文档列表', '失败', error.message);
+            }
+        }
+        
+        async function uploadDocument() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('请选择一个文件');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('请先登录');
+                }
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('http://localhost:8888/api/v1/documents/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                document.getElementById('upload-status').innerHTML = 
+                    `<div class="status success">上传成功！文档ID: ${result.id}</div>`;
+                
+                logResult('文档上传', '成功', `文档ID: ${result.id}`);
+                
+                // 重新加载文档列表
+                setTimeout(loadDocuments, 1000);
+            } catch (error) {
+                document.getElementById('upload-status').innerHTML = 
+                    `<div class="status error">上传失败: ${error.message}</div>`;
+                logResult('文档上传', '失败', error.message);
+            }
+        }
+        
+        async function deleteDocument(documentId) {
+            if (!confirm('确定要删除这个文档吗？')) {
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('请先登录');
+                }
+                
+                const response = await fetch(`http://localhost:8888/api/v1/documents/${documentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                logResult('文档删除', '成功', `文档ID: ${documentId}`);
+                
+                // 重新加载文档列表
+                setTimeout(loadDocuments, 1000);
+            } catch (error) {
+                logResult('文档删除', '失败', error.message);
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function logResult(test, status, message) {
+            const resultsDiv = document.getElementById('test-results');
+            const timestamp = new Date().toLocaleTimeString();
+            const statusClass = status === '成功' ? 'success' : 'error';
+            
+            resultsDiv.innerHTML += `
+                <div class="status ${statusClass}">
+                    [${timestamp}] ${test}: ${status} - ${message}
+                </div>
+            `;
+        }
+        
+        // 页面加载时检查是否已有token
+        window.onload = function() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                document.getElementById('login-status').innerHTML = 
+                    '<div class="status success">已检测到访问令牌</div>';
+            }
+        };
+    </script>
+</body>
+</html>

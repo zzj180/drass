@@ -1,11 +1,6 @@
 # Production Environment Configuration
 environment: "production"
 
-# Dify Platform Settings
-dify:
-  platform_url: "${DIFY_PRODUCTION_URL}"
-  api_key: "${DIFY_PRODUCTION_API_KEY}"
-  workspace_id: "${DIFY_PRODUCTION_WORKSPACE_ID}"
   
 # Application Configuration
 app:

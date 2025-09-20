@@ -24,14 +24,23 @@ export default defineConfig({
     host: '0.0.0.0',
     strictPort: true,
     historyApiFallback: true,
+    cors: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8888',  // Updated to match backend port
+        target: 'http://localhost:8888',
         changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api'),
       },
       '/ws': {
-        target: 'ws://localhost:8888',  // Updated to match backend port
+        target: 'ws://localhost:8888',
         ws: true,
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

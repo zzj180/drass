@@ -21,6 +21,8 @@ class TestChatRequest(BaseModel):
     message: str = Field(..., description="User message")
     context: Optional[str] = Field(None, description="Optional context")
     use_rag: bool = Field(default=True, description="Whether to use RAG")
+    temperature: Optional[float] = Field(default=0.7, description="Temperature for generation")
+    max_tokens: Optional[int] = Field(default=4096, description="Maximum tokens to generate")
 
 
 class TestEmbeddingRequest(BaseModel):
@@ -50,10 +52,11 @@ async def test_chat(request: TestChatRequest) -> Dict[str, Any]:
             )
             response = result.get("response", "")
         else:
-            # Direct LLM call
+            # Direct LLM call with provided temperature
             response = await llm_service.generate(
                 prompt=request.message,
-                max_tokens=500
+                max_tokens=request.max_tokens or 2048,  # 使用更大的默认token数量
+                temperature=request.temperature
             )
         
         return {

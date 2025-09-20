@@ -19,7 +19,7 @@ interface ApiAction {
   };
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8888/api/v1';
 
 /**
  * Custom API middleware for handling API calls with Redux

@@ -30,6 +30,7 @@ const queryClient = new QueryClient({
  * Provides all necessary contexts and providers for the application
  */
 function App() {
+
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>

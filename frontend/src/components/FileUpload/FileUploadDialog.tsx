@@ -111,13 +111,14 @@ export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
           const response = await fetch(`${getApiUrl('backendUrl')}/api/v1/documents/upload`, {
             method: 'POST',
             headers: {
-              ...authService.getAuthHeaders(),
+              ...(await authService.getAuthHeadersWithRefresh()),
             },
             body: formData,
           });
 
           if (!response.ok) {
-            throw new Error(`Upload failed: ${response.statusText}`);
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(`Upload failed: ${errorData.detail || response.statusText} • ${response.status}`);
           }
 
           const document = await response.json();
@@ -129,7 +130,7 @@ export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...authService.getAuthHeaders(),
+                ...(await authService.getAuthHeadersWithRefresh()),
               },
               body: JSON.stringify({
                 chunk_size: 1000,
@@ -139,7 +140,8 @@ export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
           );
 
           if (!processResponse.ok) {
-            throw new Error('Failed to process document for knowledge base');
+            const errorData = await processResponse.json().catch(() => ({ detail: processResponse.statusText }));
+            throw new Error(`Failed to process document: ${errorData.detail || processResponse.statusText} • ${processResponse.status}`);
           }
 
           results.push({
@@ -369,14 +371,14 @@ export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
                   <ListItemIcon>
                     <FileIcon />
                   </ListItemIcon>
-                  <ListItemText
-                    primary={item.file.name}
-                    secondary={
-                      <>
-                        {formatFileSize(item.file.size)} • {item.purpose === 'knowledge_base' ? 'Knowledge Base' : 'Business Context'}
-                      </>
-                    }
-                  />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      {item.file.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatFileSize(item.file.size)} • {item.purpose === 'knowledge_base' ? 'Knowledge Base' : 'Business Context'}
+                    </Typography>
+                  </Box>
                   <ListItemSecondaryAction>
                     <IconButton edge="end" onClick={() => handleRemoveFile(index)}>
                       <DeleteIcon />
@@ -417,20 +419,22 @@ export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
                       <ErrorIcon color="error" />
                     )}
                   </ListItemIcon>
-                  <ListItemText
-                    primary={result.name}
-                    secondary={
-                      <>
-                        <Typography component="span" variant="caption" color={result.status === 'success' ? 'success.main' : 'error.main'}>
-                          {result.message}
-                        </Typography>
-                        {' • '}
-                        <Typography component="span" variant="caption">
-                          {result.purpose === 'knowledge_base' ? 'Knowledge Base' : 'Business Context'}
-                        </Typography>
-                      </>
-                    }
-                  />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      {result.name}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Typography variant="caption" color={result.status === 'success' ? 'success.main' : 'error.main'}>
+                        {result.message}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        •
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {result.purpose === 'knowledge_base' ? 'Knowledge Base' : 'Business Context'}
+                      </Typography>
+                    </Box>
+                  </Box>
                 </ListItem>
               ))}
             </List>

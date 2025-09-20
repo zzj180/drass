@@ -67,21 +67,21 @@ async def get_documents(
             folder_id=folder_id,
             status=status,
             tags=tags,
-            limit=limit,
-            offset=offset
+            skip=offset,
+            limit=limit
         )
         
         return [
             Document(
-                id=doc["id"],
-                name=doc["name"],
-                type=doc["type"],
-                size=doc["size"],
-                status=doc["status"],
-                metadata=doc.get("metadata", {}),
-                created_at=doc["created_at"],
-                updated_at=doc["updated_at"],
-                tags=doc.get("tags", [])
+                id=str(doc.id),
+                name=doc.filename,
+                type=doc.file_type.value,
+                size=doc.file_size,
+                status=doc.status.value,
+                metadata=doc.metadata or {},
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+                tags=doc.tags or []
             )
             for doc in documents
         ]
@@ -377,10 +377,11 @@ async def delete_document(
     """
     try:
         from app.services.document_service import document_service
+        from uuid import UUID
         
         success = await document_service.delete_document(
-            document_id=document_id,
-            user_id=current_user["id"]
+            user_id=current_user["id"],
+            document_id=UUID(document_id)
         )
         
         if not success:
