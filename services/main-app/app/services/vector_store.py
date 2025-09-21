@@ -14,7 +14,7 @@ class VectorStoreService:
     
     def __init__(self):
         self.vector_store = None
-        self.collection_name = "compliance_docs"
+        self.collection_name = getattr(settings, 'VECTOR_STORE_COLLECTION', 'compliance_docs')
         self._initialized = False
     
     async def initialize(self):
@@ -38,38 +38,64 @@ class VectorStoreService:
                     model_name="sentence-transformers/all-MiniLM-L6-v2"
                 )
 
-                persist_dir = getattr(settings, 'CHROMA_PERSIST_DIRECTORY', './data/chroma')
-
-                # Handle corrupted ChromaDB - clean and retry
+                # Check if we should use ChromaDB server or local persistence
+                chroma_server_host = getattr(settings, 'CHROMA_SERVER_HOST', 'localhost')
+                chroma_server_port = getattr(settings, 'CHROMA_SERVER_PORT', 8005)
+                
+                # Try to connect to ChromaDB server first
                 try:
+                    import chromadb
+                    client = chromadb.HttpClient(
+                        host=chroma_server_host,
+                        port=chroma_server_port
+                    )
+                    # Test connection
+                    client.heartbeat()
+                    logger.info(f"Connected to ChromaDB server at {chroma_server_host}:{chroma_server_port}")
+                    
+                    # Use the server client directly
                     self.vector_store = Chroma(
                         collection_name=self.collection_name,
                         embedding_function=embeddings,
-                        persist_directory=persist_dir
+                        client=client
                     )
-                    logger.info(f"Initialized ChromaDB vector store at {persist_dir}")
-                except Exception as db_error:
-                    if "no such column" in str(db_error) or "database" in str(db_error).lower():
-                        logger.warning(f"ChromaDB appears corrupted: {db_error}")
-                        logger.info("Attempting to clean and reinitialize ChromaDB...")
-
-                        # Remove corrupted database
-                        if os.path.exists(persist_dir):
-                            shutil.rmtree(persist_dir, ignore_errors=True)
-                            logger.info(f"Removed corrupted ChromaDB at {persist_dir}")
-
-                        # Create fresh directory
-                        os.makedirs(persist_dir, exist_ok=True)
-
-                        # Try again with fresh database
+                    logger.info(f"Initialized ChromaDB vector store with server client")
+                except Exception as server_error:
+                    logger.warning(f"ChromaDB server not available: {server_error}")
+                    logger.info("Falling back to local persistence")
+                    
+                    persist_dir = getattr(settings, 'CHROMA_PERSIST_DIRECTORY', './data/chroma')
+                    
+                    # Handle corrupted ChromaDB - clean and retry
+                    try:
                         self.vector_store = Chroma(
                             collection_name=self.collection_name,
                             embedding_function=embeddings,
                             persist_directory=persist_dir
                         )
-                        logger.info(f"Successfully reinitialized ChromaDB vector store at {persist_dir}")
-                    else:
-                        raise db_error
+                        logger.info(f"Initialized ChromaDB vector store at {persist_dir}")
+                    except Exception as db_error:
+                        if "no such column" in str(db_error) or "database" in str(db_error).lower():
+                            logger.warning(f"ChromaDB appears corrupted: {db_error}")
+                            logger.info("Attempting to clean and reinitialize ChromaDB...")
+
+                            # Remove corrupted database
+                            if os.path.exists(persist_dir):
+                                shutil.rmtree(persist_dir, ignore_errors=True)
+                                logger.info(f"Removed corrupted ChromaDB at {persist_dir}")
+
+                            # Create fresh directory
+                            os.makedirs(persist_dir, exist_ok=True)
+
+                            # Try again with fresh database
+                            self.vector_store = Chroma(
+                                collection_name=self.collection_name,
+                                embedding_function=embeddings,
+                                persist_directory=persist_dir
+                            )
+                            logger.info(f"Successfully reinitialized ChromaDB vector store at {persist_dir}")
+                        else:
+                            raise db_error
             else:
                 logger.warning(f"Unsupported vector store type: {vector_store_type}")
 

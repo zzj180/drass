@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 from typing import Dict, Any
 
-from app.api.v1 import chat, knowledge, documents, auth, settings, test
+from app.api.v1 import chat, knowledge, documents, auth, settings, test, audit, audit_enhanced, audit_websocket, monitoring, security_enhancement, security_testing, rag_optimization
 from app.core.config import settings as app_settings
 from app.core.logging import setup_logging
 from app.middleware.error_handler import error_handler_middleware
@@ -53,6 +53,11 @@ async def lifespan(app: FastAPI):
         from app.tasks.document_processor import document_processor
         await document_processor.start()
         logger.info("Document processor workers started")
+        
+        # Initialize RAG optimization service
+        from app.services.rag_optimization_service import rag_optimization_service
+        await rag_optimization_service.initialize()
+        logger.info("RAG optimization service initialized")
         
         # Initialize WebSocket message broker (only if Redis is enabled)
         if getattr(app_settings, 'REDIS_ENABLED', True):
@@ -130,6 +135,13 @@ app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledg
 app.include_router(documents.router, prefix="/api/v1/documents", tags=["documents"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(test.router, prefix="/api/v1/test", tags=["test"])
+app.include_router(audit.router, prefix="/api/v1/audit", tags=["audit"])
+app.include_router(audit_enhanced.router, prefix="/api/v1", tags=["audit-enhanced"])
+app.include_router(audit_websocket.router, prefix="/api/v1", tags=["audit-websocket"])
+app.include_router(monitoring.router, prefix="/api/v1", tags=["monitoring"])
+app.include_router(security_enhancement.router, prefix="/api/v1", tags=["security-enhancement"])
+app.include_router(security_testing.router, prefix="/api/v1", tags=["security-testing"])
+app.include_router(rag_optimization.router, tags=["rag-optimization"])
 
 # Include WebSocket routers
 from app.api.v1 import websocket

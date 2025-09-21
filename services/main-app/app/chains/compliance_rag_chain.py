@@ -2,7 +2,8 @@
 LangChain RAG Chain Implementation for Compliance Assistant
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
+import asyncio
 from langchain.chains import RetrievalQA, ConversationalRetrievalChain
 from langchain.chains.question_answering import load_qa_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -89,7 +90,9 @@ class ComplianceRAGChain:
             k: Number of documents to retrieve
             rerank_k: Number of documents after reranking
         """
-        self.llm = llm or self._create_default_llm()
+        # Use UnifiedLLMService instead of LangChain ChatOpenAI
+        self.llm_service = llm or self._get_unified_llm_service()
+        self.llm = self._create_langchain_llm_wrapper()
         self.embeddings = embeddings or self._create_default_embeddings()
         self.vector_store = vector_store
         self.memory = memory or self._create_default_memory()
@@ -106,6 +109,65 @@ class ComplianceRAGChain:
         if self.vector_store:
             self._setup_retriever()
             self._setup_chains()
+    
+    def _get_unified_llm_service(self):
+        """Get the UnifiedLLMService instance"""
+        try:
+            from app.services.llm_service_enhanced import llm_service
+            return llm_service
+        except ImportError:
+            try:
+                from app.services.llm_service_enhanced import unified_llm_service
+                return unified_llm_service
+            except ImportError:
+                logger.warning("UnifiedLLMService not available, falling back to default LLM")
+                return None
+    
+    def _create_langchain_llm_wrapper(self):
+        """Create a LangChain-compatible LLM wrapper"""
+        if self.llm_service:
+            # Create a wrapper that makes UnifiedLLMService compatible with LangChain
+            return self._create_unified_llm_wrapper()
+        else:
+            # Fallback to default LangChain LLM
+            return self._create_default_llm()
+    
+    def _create_unified_llm_wrapper(self):
+        """Create a wrapper for UnifiedLLMService to work with LangChain"""
+        class UnifiedLLMWrapper:
+            def __init__(self, llm_service):
+                self.llm_service = llm_service
+                self.model_name = "vllm"
+                self.temperature = 0.7
+                self.max_tokens = 2048
+                self.streaming = True
+            
+            async def ainvoke(self, messages, **kwargs):
+                """Async invoke method for LangChain compatibility"""
+                # Convert LangChain messages to string
+                if isinstance(messages, list):
+                    content = ""
+                    for msg in messages:
+                        if hasattr(msg, 'content'):
+                            content += msg.content + "\n"
+                        else:
+                            content += str(msg) + "\n"
+                else:
+                    content = str(messages)
+                
+                # Call UnifiedLLMService
+                response = await self.llm_service.generate(content, max_tokens=self.max_tokens)
+                
+                # Return in LangChain format
+                from langchain_core.messages import AIMessage
+                return AIMessage(content=response)
+            
+            def invoke(self, messages, **kwargs):
+                """Sync invoke method for LangChain compatibility"""
+                import asyncio
+                return asyncio.run(self.ainvoke(messages, **kwargs))
+        
+        return UnifiedLLMWrapper(self.llm_service)
     
     def _create_default_llm(self):
         """Create default LLM instance"""
@@ -201,18 +263,98 @@ class ComplianceRAGChain:
                         "sources": result.get("source_documents", [])
                     }
             except Exception as e:
-                logger.warning(f"RAG chain failed, falling back to direct LLM: {e}")
+                logger.warning(f"RAG chain failed, trying direct retrieval: {e}")
+            
+            # Try direct retrieval and LLM generation
+            try:
+                # Retrieve relevant documents
+                docs = await self.retriever.ainvoke(query)
+                
+                if docs:
+                    # Combine document content
+                    context = "\n\n".join([doc.page_content for doc in docs])
+                    
+                    # Create enhanced prompt with context
+                    enhanced_query = f"""基于以下知识库文档内容，回答用户问题：
+
+知识库内容：
+{context}
+
+用户问题：{query}
+
+请基于知识库内容提供详细、专业的回答。如果知识库内容不足以回答问题，请说明并基于你的专业知识提供建议。"""
+                    
+                    # Use UnifiedLLMService to generate response
+                    if self.llm_service:
+                        response = await self.llm_service.generate(enhanced_query, max_tokens=2048)
+                    else:
+                        from app.services.llm_service import llm_service
+                        response = await llm_service.generate(enhanced_query, max_tokens=2048)
+                    
+                    return {
+                        "answer": response,
+                        "sources": docs
+                    }
+                else:
+                    logger.warning("No relevant documents found")
+            except Exception as e:
+                logger.warning(f"Direct retrieval failed: {e}")
         
-        # Fallback: Use LLM directly without RAG prompts
+        # Try direct vector store search if retriever is not available
+        elif self.vector_store:
+            try:
+                # Use vector store directly for similarity search
+                docs = self.vector_store.similarity_search(query, k=self.k)
+                
+                if docs:
+                    # Combine document content
+                    context = "\n\n".join([doc.page_content for doc in docs])
+                    
+                    # Create enhanced prompt with context
+                    enhanced_query = f"""基于以下知识库文档内容，回答用户问题：
+
+知识库内容：
+{context}
+
+用户问题：{query}
+
+请基于知识库内容提供详细、专业的回答。如果知识库内容不足以回答问题，请说明并基于你的专业知识提供建议。"""
+                    
+                    # Use UnifiedLLMService to generate response
+                    if self.llm_service:
+                        response = await self.llm_service.generate(enhanced_query, max_tokens=2048)
+                    else:
+                        from app.services.llm_service import llm_service
+                        response = await llm_service.generate(enhanced_query, max_tokens=2048)
+                    
+                    return {
+                        "answer": response,
+                        "sources": docs
+                    }
+                else:
+                    logger.warning("No relevant documents found in vector store")
+            except Exception as e:
+                logger.warning(f"Direct vector store search failed: {e}")
+        
+        # Fallback: Use UnifiedLLMService directly without RAG
         try:
-            from app.services.llm_service import llm_service
-            
-            response = await llm_service.generate(query, max_tokens=2048)
-            
-            return {
-                "answer": response,
-                "sources": []
-            }
+            if self.llm_service:
+                # Use the UnifiedLLMService directly
+                response = await self.llm_service.generate(query, max_tokens=2048)
+                
+                return {
+                    "answer": response,
+                    "sources": []
+                }
+            else:
+                # Fallback to old llm_service
+                from app.services.llm_service import llm_service
+                response = await llm_service.generate(query, max_tokens=2048)
+                
+                return {
+                    "answer": response,
+                    "sources": []
+                }
         except Exception as e:
             logger.error(f"Error in RAG chain ainvoke: {e}")
             return {
@@ -258,34 +400,46 @@ class ComplianceRAGChain:
     def _setup_retriever(self):
         """Setup the retriever with optional enhancements"""
         if not self.vector_store:
-            raise ValueError("Vector store is required for retriever setup")
+            logger.warning("Vector store not available, skipping retriever setup")
+            self.retriever = None
+            return
         
-        # Base retriever
-        base_retriever = self.vector_store.as_retriever(
-            search_kwargs={"k": self.k}
-        )
-        
-        # Multi-query retriever
-        if self.use_multi_query:
-            base_retriever = MultiQueryRetriever.from_llm(
-                retriever=base_retriever,
-                llm=self.llm,
-                prompt=MULTI_QUERY_PROMPT
+        try:
+            # Base retriever
+            base_retriever = self.vector_store.as_retriever(
+                search_kwargs={"k": self.k}
             )
-        
-        # Reranking
-        if self.use_reranking and settings.RERANKING_ENABLED:
-            compressor = CohereRerank(
-                cohere_api_key=settings.RERANKING_API_KEY,
-                model=settings.RERANKING_MODEL,
-                top_n=self.rerank_k
-            )
-            base_retriever = ContextualCompressionRetriever(
-                base_compressor=compressor,
-                base_retriever=base_retriever
-            )
-        
-        self.retriever = base_retriever
+            
+            # Multi-query retriever - skip if using UnifiedLLMService
+            if self.use_multi_query and not self.llm_service:
+                try:
+                    base_retriever = MultiQueryRetriever.from_llm(
+                        retriever=base_retriever,
+                        llm=self.llm,
+                        prompt=MULTI_QUERY_PROMPT
+                    )
+                except Exception as e:
+                    logger.warning(f"Multi-query retriever setup failed: {e}")
+                    # Continue with base retriever
+            
+            # Reranking
+            if self.use_reranking and settings.RERANKING_ENABLED:
+                compressor = CohereRerank(
+                    cohere_api_key=settings.RERANKING_API_KEY,
+                    model=settings.RERANKING_MODEL,
+                    top_n=self.rerank_k
+                )
+                base_retriever = ContextualCompressionRetriever(
+                    base_compressor=compressor,
+                    base_retriever=base_retriever
+                )
+            
+            self.retriever = base_retriever
+            logger.info("Retriever setup successful")
+            
+        except Exception as e:
+            logger.error(f"Retriever setup failed: {e}")
+            self.retriever = None
     
     def _setup_chains(self):
         """Setup QA and conversational chains"""
@@ -297,24 +451,28 @@ class ComplianceRAGChain:
     
     def _create_qa_chain(self):
         """Create basic QA chain"""
-        qa_prompt = ChatPromptTemplate.from_messages([
-            ("system", COMPLIANCE_SYSTEM_PROMPT),
-            ("human", COMPLIANCE_QA_PROMPT)
-        ])
-        
-        # Create document chain
-        document_chain = create_stuff_documents_chain(
-            self.llm,
-            qa_prompt
-        )
-        
-        # Create retrieval chain
-        retrieval_chain = create_retrieval_chain(
-            self.retriever,
-            document_chain
-        )
-        
-        return retrieval_chain
+        try:
+            qa_prompt = ChatPromptTemplate.from_messages([
+                ("system", COMPLIANCE_SYSTEM_PROMPT),
+                ("human", COMPLIANCE_QA_PROMPT)
+            ])
+            
+            # Create document chain
+            document_chain = create_stuff_documents_chain(
+                self.llm,
+                qa_prompt
+            )
+            
+            # Create retrieval chain
+            retrieval_chain = create_retrieval_chain(
+                self.retriever,
+                document_chain
+            )
+            
+            return retrieval_chain
+        except Exception as e:
+            logger.warning(f"QA chain creation failed: {e}")
+            return None
     
     def _create_conversational_chain(self):
         """Create conversational retrieval chain"""
@@ -434,6 +592,45 @@ class ComplianceRAGChain:
         
         return formatted
     
+    async def astream(self, query: str, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+        """
+        Stream response from the RAG chain
+        
+        Args:
+            query: The query to process
+            session_id: Optional session ID for conversation history
+            
+        Yields:
+            Response chunks
+        """
+        try:
+            # Use the ask method with streaming enabled
+            result = await self.ask(
+                question=query,
+                chat_history=None,  # Could be enhanced to use session_id
+                stream=True
+            )
+            
+            # Stream the response
+            if isinstance(result, dict) and "answer" in result:
+                answer = result["answer"]
+                # Split into chunks for streaming
+                words = answer.split()
+                chunk_size = 3  # Stream 3 words at a time
+                
+                for i in range(0, len(words), chunk_size):
+                    chunk = " ".join(words[i:i + chunk_size])
+                    if i + chunk_size < len(words):
+                        chunk += " "
+                    yield chunk
+                    await asyncio.sleep(0.01)  # Small delay for streaming effect
+            else:
+                yield str(result)
+                
+        except Exception as e:
+            logger.error(f"Error in astream: {e}")
+            yield f"Error: {str(e)}"
+
     def _format_response(self, response: Any) -> Dict[str, Any]:
         """Format the chain response with word count validation"""
         if isinstance(response, dict):

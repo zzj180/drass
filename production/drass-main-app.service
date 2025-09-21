@@ -1,0 +1,15 @@
+[Unit]
+Description=DRASS Main Application
+After=network.target
+
+[Service]
+Type=simple
+User=qwkj
+WorkingDirectory=/home/qwkj/drass
+Environment=PATH=/home/qwkj/drass/venv/bin
+ExecStart=/home/qwkj/drass/venv/bin/uvicorn services.main-app.app.main:app --host 0.0.0.0 --port 8888 --workers 4
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

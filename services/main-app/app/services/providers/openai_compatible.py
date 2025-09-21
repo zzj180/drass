@@ -148,9 +148,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 content=choice["message"]["content"],
                 model=data.get("model", self.model_name),
                 provider="openai_compatible",
-                latency=time.time() - start_time,
-                token_usage=token_usage,
-                raw_response=data
+                response_time=time.time() - start_time,
+                usage=token_usage,
+                metadata={"raw_response": data}
             )
 
         except httpx.HTTPError as e:

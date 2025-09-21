@@ -1,0 +1,48 @@
+# 生产环境监控配置
+monitoring:
+  enabled: true
+  interval: 30s
+  
+  # 系统监控
+  system:
+    cpu_threshold: 80
+    memory_threshold: 85
+    disk_threshold: 90
+    
+  # 应用监控
+  application:
+    response_time_threshold: 5.0
+    error_rate_threshold: 5.0
+    throughput_threshold: 1000
+    
+  # 数据库监控
+  database:
+    connection_pool_threshold: 80
+    query_time_threshold: 2.0
+    slow_query_threshold: 5.0
+    
+  # 缓存监控
+  cache:
+    hit_rate_threshold: 70
+    memory_usage_threshold: 80
+    
+  # 告警配置
+  alerts:
+    email:
+      enabled: false
+      recipients: ["admin@yourdomain.com"]
+    webhook:
+      enabled: false
+      url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    
+  # 日志监控
+  logs:
+    error_patterns:
+      - "ERROR"
+      - "CRITICAL"
+      - "Exception"
+      - "Traceback"
+    warning_patterns:
+      - "WARNING"
+      - "WARN"
+      - "DeprecationWarning"

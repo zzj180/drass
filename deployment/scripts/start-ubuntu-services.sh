@@ -1162,23 +1162,40 @@ EOF
     fi
 fi
 
-# Start Drass frontend
+# Start Drass frontend using quick-start.sh
 echo -e "\n${BLUE}Starting Drass Frontend...${NC}"
 if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
-    # First check if port 5173 is blocked by something else
-    if lsof -i :5173 >/dev/null 2>&1; then
-        echo -e "${YELLOW}Port 5173 is in use, attempting to free it...${NC}"
-        lsof -ti :5173 | xargs kill -9 2>/dev/null || true
-        sleep 2
-    fi
-
-    cd "$BASE_DIR/frontend"
-
-    # Check if dist folder exists
-    if [ ! -d "dist" ]; then
-        echo -e "${YELLOW}Building frontend...${NC}"
-
-        # Install dependencies if node_modules doesn't exist
+    echo -e "${BLUE}Using quick-start.sh to start frontend...${NC}"
+    
+    # Check if quick-start.sh exists
+    if [ -f "$BASE_DIR/quick-start.sh" ]; then
+        echo -e "${GREEN}✓${NC} Found quick-start.sh script"
+        
+        # Make sure it's executable
+        chmod +x "$BASE_DIR/quick-start.sh"
+        
+        # Run the quick-start script
+        echo -e "${BLUE}Executing quick-start.sh...${NC}"
+        bash "$BASE_DIR/quick-start.sh"
+        
+        # Wait a moment for the service to start
+        sleep 5
+        
+        # Check if frontend started successfully
+        if check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC} Frontend started successfully using quick-start.sh"
+        else
+            echo -e "${YELLOW}⚠${NC} Frontend may not have started properly"
+            echo -e "${YELLOW}Check logs at: $LOG_DIR/frontend.log${NC}"
+        fi
+    else
+        echo -e "${RED}✗${NC} quick-start.sh not found at $BASE_DIR/quick-start.sh"
+        echo -e "${YELLOW}Falling back to development server...${NC}"
+        
+        # Fallback to simple development server
+        cd "$BASE_DIR/frontend"
+        
+        # Install dependencies if needed
         if [ ! -d "node_modules" ]; then
             echo -e "${BLUE}Installing frontend dependencies...${NC}"
             npm install --legacy-peer-deps || {
@@ -1187,197 +1204,19 @@ if ! check_service 5173 "Drass Frontend" >/dev/null 2>&1; then
                 exit 0
             }
         fi
-
-        # Try to build with TypeScript check disabled
-        echo -e "${BLUE}Building frontend (skipping type checks)...${NC}"
-
-        # Method 1: Try to build with TSC_COMPILE_ON_ERROR
-        TSC_COMPILE_ON_ERROR=true npm run build 2>/dev/null || {
-            echo -e "${YELLOW}Standard build failed, trying alternative build...${NC}"
-
-            # Method 2: Build with Vite directly, skipping TypeScript
-            npx vite build --mode production 2>/dev/null || {
-                echo -e "${YELLOW}Vite build failed, trying development server instead...${NC}"
-
-                # Method 3: Use development server as fallback
-                echo -e "${BLUE}Starting frontend in development mode...${NC}"
-                start_service "Drass Frontend Dev" "cd $BASE_DIR/frontend && npm run dev -- --host 0.0.0.0 --port 5173" "$LOG_DIR/drass-frontend.log" 5173
-                exit 0
-            }
-        }
-    fi
-
-    # Check if build was successful
-    if [ -d "dist" ]; then
-        echo -e "${GREEN}✓${NC} Frontend built successfully"
-
-        # Serve the production build
-        echo -e "${BLUE}Starting frontend server...${NC}"
-
-        # Try different methods to serve the frontend
-        FRONTEND_STARTED=false
-
-        # Method 1: Use Python HTTP server (most reliable)
-        if [ "$FRONTEND_STARTED" = false ] && command -v python3 >/dev/null 2>&1; then
-            echo -e "${BLUE}Using Python HTTP server (recommended)...${NC}"
-
-            # Create a Python SPA server script for better routing support
-            cat > "$BASE_DIR/frontend/serve_spa.py" << 'EOF'
-#!/usr/bin/env python3
-import http.server
-import socketserver
-import os
-import sys
-from pathlib import Path
-
-PORT = 5173
-DIRECTORY = "dist"
-
-class SPAHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=DIRECTORY, **kwargs)
-
-    def do_GET(self):
-        path = self.translate_path(self.path)
-        if not os.path.exists(path) or os.path.isdir(path):
-            self.path = '/index.html'
-        return http.server.SimpleHTTPRequestHandler.do_GET(self)
-
-    def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        super().end_headers()
-
-    def log_message(self, format, *args):
-        if '/assets/' not in args[0]:
-            super().log_message(format, *args)
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-with socketserver.TCPServer(("0.0.0.0", PORT), SPAHandler) as httpd:
-    print(f"Frontend server running at http://0.0.0.0:{PORT}/")
-    httpd.serve_forever()
-EOF
-            chmod +x "$BASE_DIR/frontend/serve_spa.py"
-
-            start_service "Drass Frontend Python" "cd $BASE_DIR/frontend && python3 serve_spa.py" "$LOG_DIR/drass-frontend.log" 5173
-            sleep 3
-
-            if lsof -i :5173 >/dev/null 2>&1; then
-                FRONTEND_STARTED=true
-                echo -e "${GREEN}✓${NC} Frontend started with Python SPA server"
-            fi
-        fi
-
-        # Method 2: Try npx serve (if Python fails)
-        if [ "$FRONTEND_STARTED" = false ]; then
-            # Check if npm serve is available
-            if npm list -g serve >/dev/null 2>&1 || npm list serve >/dev/null 2>&1; then
-                echo -e "${BLUE}Trying npx serve...${NC}"
-                start_service "Drass Frontend" "cd $BASE_DIR/frontend && npx serve dist -l 5173 -n" "$LOG_DIR/drass-frontend.log" 5173
-                sleep 3
-
-                if lsof -i :5173 >/dev/null 2>&1; then
-                    FRONTEND_STARTED=true
-                    echo -e "${GREEN}✓${NC} Frontend started with npx serve"
-                fi
-            fi
-        fi
-
-        # Method 3: Try Node.js HTTP server (as last resort)
-        if [ "$FRONTEND_STARTED" = false ] && command -v node >/dev/null 2>&1; then
-            echo -e "${BLUE}Creating Node.js static server...${NC}"
-            cat > "$BASE_DIR/frontend/serve-static.js" << 'EOF'
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-
-const PORT = 5173;
-const DIST_DIR = path.join(__dirname, 'dist');
-
-const mimeTypes = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.woff': 'application/font-woff',
-    '.woff2': 'application/font-woff2',
-    '.ttf': 'application/font-ttf',
-    '.eot': 'application/vnd.ms-fontobject'
-};
-
-const server = http.createServer((req, res) => {
-    let filePath = path.join(DIST_DIR, req.url === '/' ? 'index.html' : req.url);
-
-    // Handle SPA routing
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        filePath = path.join(DIST_DIR, 'index.html');
-    }
-
-    fs.readFile(filePath, (err, content) => {
-        if (err) {
-            res.writeHead(404);
-            res.end('Not found');
-            return;
-        }
-
-        const ext = path.extname(filePath);
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-        // Add CORS headers
-        res.writeHead(200, {
-            'Content-Type': contentType,
-            'Access-Control-Allow-Origin': '*'
-        });
-        res.end(content);
-    });
-});
-
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Frontend server running at http://localhost:${PORT}/`);
-});
-EOF
-            start_service "Drass Frontend Node" "cd $BASE_DIR/frontend && node serve-static.js" "$LOG_DIR/drass-frontend.log" 5173
-            sleep 3
-
-            if lsof -i :5173 >/dev/null 2>&1; then
-                FRONTEND_STARTED=true
-                echo -e "${GREEN}✓${NC} Frontend started with Node.js static server"
-            fi
-        fi
-
-        # Method 4: Use serve-frontend.sh as fallback
-        if [ "$FRONTEND_STARTED" = false ] && [ -f "$BASE_DIR/serve-frontend.sh" ]; then
-            echo -e "${YELLOW}Trying serve-frontend.sh script...${NC}"
-            bash "$BASE_DIR/serve-frontend.sh"
-            sleep 3
-
-            if lsof -i :5173 >/dev/null 2>&1; then
-                FRONTEND_STARTED=true
-                echo -e "${GREEN}✓${NC} Frontend started with serve-frontend.sh"
-            fi
-        fi
-
-        if [ "$FRONTEND_STARTED" = false ]; then
-            echo -e "${RED}✗${NC} Failed to start frontend with production build"
-            echo -e "${YELLOW}Check logs at: $LOG_DIR/drass-frontend.log${NC}"
-            echo -e "${YELLOW}You can try manually: bash $BASE_DIR/serve-frontend.sh${NC}"
-        fi
-    else
-        echo -e "${YELLOW}Frontend build not found, starting development server...${NC}"
-        start_service "Drass Frontend Dev" "cd $BASE_DIR/frontend && npm run dev -- --host 0.0.0.0 --port 5173" "$LOG_DIR/drass-frontend.log"
+        
+        # Start development server
+        echo -e "${BLUE}Starting development server...${NC}"
+        start_service "Drass Frontend Dev" "cd $BASE_DIR/frontend && npm run dev -- --host 0.0.0.0 --port 5173" "$LOG_DIR/drass-frontend.log" 5173
         sleep 5
+        
         if ! lsof -i :5173 >/dev/null 2>&1; then
             echo -e "${RED}✗${NC} Development server failed to start"
             echo -e "${YELLOW}Check logs at: $LOG_DIR/drass-frontend.log${NC}"
         fi
     fi
+else
+    echo -e "${GREEN}✓${NC} Frontend already running on port 5173"
 fi
 
 # Final status check

@@ -1,0 +1,17 @@
+[Unit]
+Description=磐石数据合规分析系统前端服务
+After=network.target
+
+[Service]
+Type=simple
+User=qwkj
+Group=qwkj
+WorkingDirectory=/home/qwkj/drass
+ExecStart=/home/qwkj/drass/start-frontend-only.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

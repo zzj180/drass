@@ -49,6 +49,10 @@ class LLMService:
             logger.info(f"Temperature: {temperature or settings.LLM_TEMPERATURE or 0.7}")
             logger.info(f"Max tokens: {max_tokens}")
             
+            # Calculate optimal timeout based on max_tokens
+            from app.core.performance_config import performance_config
+            optimal_timeout = performance_config.get_optimal_timeout(max_tokens or settings.LLM_MAX_TOKENS or 2048)
+            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.api_base}/chat/completions",
@@ -57,76 +61,66 @@ class LLMService:
                         "Authorization": f"Bearer {self.api_key or '123456'}",  # Use 123456 as default
                         "Content-Type": "application/json"
                     },
-                    timeout=300.0  # Increase timeout to 300 seconds for large models
+                    timeout=optimal_timeout  # Dynamic timeout based on token count
                 )
                 
                 if response.status_code == 200:
                     result = response.json()
                     content = result["choices"][0]["message"]["content"]
                     
-                    # Remove <think> tags and their content if present
+                    # Enhanced content cleaning and validation
                     import re
-                    # Pattern to match <think>...</think> including newlines
+                    
+                    # First, remove <think> tags and their content
                     think_pattern = r'<think>.*?</think>\s*'
                     content = re.sub(think_pattern, '', content, flags=re.DOTALL)
                     
-                    # Also remove standalone <think> tags that might not be closed
+                    # Remove standalone <think> tags that might not be closed
                     content = re.sub(r'<think>.*', '', content, flags=re.DOTALL)
                     
-                    # Trim any leading/trailing whitespace
+                    # Clean up any remaining malformed content
+                    # Remove excessive numbers and repetitive patterns
+                    content = re.sub(r'\d{10,}', '', content)  # Remove long number sequences
+                    content = re.sub(r'(\d+\.){5,}', '', content)  # Remove repetitive number patterns
+                    # Keep valid characters including markdown formatting
+                    content = re.sub(r'[^\w\s\u4e00-\u9fff.,!?;:()（）【】""''""''，。！？；：\n\r\*\#\-\+\=\|\[\]\(\)]', '', content)
+                    
+                    # Clean up excessive whitespace but preserve line breaks for formatting
+                    content = re.sub(r'[ \t]+', ' ', content)  # Replace multiple spaces/tabs with single space
+                    content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)  # Replace multiple line breaks with double line break
                     content = content.strip()
                     
-                    # If content is empty after removing think tags, try to extract some meaningful content
-                    if not content:
-                        # Try to get the original content and extract something useful
+                    # Validate content quality
+                    def is_valid_content(text):
+                        if not text or len(text.strip()) < 10:
+                            return False
+                        # Check for excessive repetition
+                        words = text.split()
+                        if len(words) > 10:
+                            unique_words = set(words)
+                            if len(unique_words) / len(words) < 0.3:  # Less than 30% unique words
+                                return False
+                        # Check for excessive numbers
+                        if len(re.findall(r'\d', text)) / len(text) > 0.5:  # More than 50% numbers
+                            return False
+                        return True
+                    
+                    # If content is invalid, try to extract meaningful content
+                    if not is_valid_content(content):
                         original_content = result["choices"][0]["message"]["content"]
                         
-                        # Check if content is wrapped in <think> tags without proper closing
-                        if original_content.startswith('<think>') and not original_content.endswith('</think>'):
-                            # Extract content from within <think> tags and generate a response
-                            think_content = re.search(r'<think>(.*)', original_content, flags=re.DOTALL)
-                            if think_content:
-                                think_text = think_content.group(1).strip()
-                                # Use the thinking content to generate a more natural response
-                                # Instead of fixed templates, try to extract the actual answer from thinking
-                                if len(think_text) > 100:  # If there's substantial thinking content
-                                    # Try to find the actual answer within the thinking
-                                    # Look for patterns that indicate the actual response
-                                    answer_patterns = [
-                                        r'所以.*?回答.*?是[：:](.*)',
-                                        r'因此.*?我的回答.*?是[：:](.*)',
-                                        r'总结.*?[：:](.*)',
-                                        r'结论.*?[：:](.*)',
-                                        r'我的建议.*?[：:](.*)',
-                                        r'基于.*?分析.*?[：:](.*)'
-                                    ]
-                                    
-                                    for pattern in answer_patterns:
-                                        match = re.search(pattern, think_text, flags=re.DOTALL)
-                                        if match:
-                                            content = match.group(1).strip()
-                                            break
-                                    
-                                    # If no pattern matched, use the last part of thinking as response
-                                    if not content:
-                                        # Take the last 200 characters as potential response
-                                        content = think_text[-200:].strip()
-                                        # Clean up any incomplete sentences
-                                        if content and not content.endswith(('.', '。', '!', '！', '?', '？')):
-                                            content += "..."
-                                else:
-                                    # For short thinking content, generate a simple response
-                                    content = "我理解您的问题，让我为您提供一些帮助。"
-                            else:
-                                content = "我理解您的问题，让我为您提供一些帮助。"
+                        # Try to extract content before <think> tags
+                        before_think = re.search(r'^([^<]*?)(?=<think>)', original_content, flags=re.DOTALL)
+                        if before_think and is_valid_content(before_think.group(1)):
+                            content = before_think.group(1).strip()
                         else:
-                            # Look for any text after <think> tags
+                            # Try to extract content after </think> tags
                             after_think = re.search(r'</think>\s*(.+)', original_content, flags=re.DOTALL)
-                            if after_think:
+                            if after_think and is_valid_content(after_think.group(1)):
                                 content = after_think.group(1).strip()
                             else:
-                                # If still empty, return a helpful message
-                                content = "我理解您的问题，让我为您提供一些帮助。"
+                                # If all else fails, provide a helpful fallback
+                                content = "抱歉，我无法生成有效的回复。请尝试重新表述您的问题，或者检查系统状态。"
                     
                     return content
                 else:

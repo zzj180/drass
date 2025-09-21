@@ -1,0 +1,35 @@
+# 生产环境备份配置
+backup:
+  enabled: true
+  
+  # 数据库备份
+  database:
+    schedule: "0 2 * * *"  # 每天凌晨2点
+    retention: 30  # 保留30天
+    compression: true
+    
+  # 文件备份
+  files:
+    schedule: "0 3 * * *"  # 每天凌晨3点
+    retention: 7  # 保留7天
+    include:
+      - "/home/qwkj/drass/data/uploads"
+      - "/home/qwkj/drass/data/chromadb_production"
+    exclude:
+      - "*.tmp"
+      - "*.log"
+      
+  # 配置备份
+  config:
+    schedule: "0 1 * * *"  # 每天凌晨1点
+    retention: 90  # 保留90天
+    include:
+      - "/home/qwkj/drass/config"
+      - "/home/qwkj/drass/services/main-app/app"
+      
+  # 备份存储
+  storage:
+    local:
+      path: "/home/qwkj/drass/backups/production"
+    remote:
+      enabled: false

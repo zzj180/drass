@@ -25,6 +25,7 @@ import {
   Security as SecurityIcon,
   Dashboard as DashboardIcon,
   Assignment as AuditIcon,
+  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';

@@ -15,6 +15,9 @@ import {
   SmartToy as BotIcon,
 } from '@mui/icons-material';
 import { v4 as uuidv4 } from 'uuid';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 
 interface Message {
   id: string;
@@ -147,9 +150,9 @@ const SimpleChatInterface: React.FC = () => {
           message: inputValue,
           use_rag: false, // 暂时禁用RAG模式，提高响应速度
           temperature: 0.7, // 使用固定温度值，确保回答的专业性
-          max_tokens: 4096, // 设置4096个token，生成更长的回答
+          max_tokens: 2048, // 增加token数量，支持完整的长回答
         }),
-        signal: AbortSignal.timeout(90000), // 设置90秒超时，给足够时间生成更长的回答
+        signal: AbortSignal.timeout(120000), // 增加超时时间到120秒，支持长回答生成
       });
 
       if (!response.ok) {
@@ -229,9 +232,91 @@ const SimpleChatInterface: React.FC = () => {
               </Avatar>
             )}
             <MessageBubble isuser={message.role === 'user' ? 'true' : 'false'}>
-              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                {message.content}
-              </Typography>
+              {message.role === 'assistant' ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={{
+                    h1: ({ children }) => (
+                      <Typography variant="h5" sx={{ mb: 2, mt: 2, fontWeight: 'bold', color: 'inherit' }}>
+                        {children}
+                      </Typography>
+                    ),
+                    h2: ({ children }) => (
+                      <Typography variant="h6" sx={{ mb: 1, mt: 2, fontWeight: 'bold', color: 'inherit' }}>
+                        {children}
+                      </Typography>
+                    ),
+                    h3: ({ children }) => (
+                      <Typography variant="subtitle1" sx={{ mb: 1, mt: 1, fontWeight: 'bold', color: 'inherit' }}>
+                        {children}
+                      </Typography>
+                    ),
+                    p: ({ children }) => (
+                      <Typography variant="body1" sx={{ mb: 1, lineHeight: 1.6, color: 'inherit' }}>
+                        {children}
+                      </Typography>
+                    ),
+                    ul: ({ children }) => (
+                      <Box component="ul" sx={{ mb: 1, pl: 2, color: 'inherit' }}>
+                        {children}
+                      </Box>
+                    ),
+                    ol: ({ children }) => (
+                      <Box component="ol" sx={{ mb: 1, pl: 2, color: 'inherit' }}>
+                        {children}
+                      </Box>
+                    ),
+                    li: ({ children }) => (
+                      <Typography component="li" variant="body1" sx={{ mb: 0.5, color: 'inherit' }}>
+                        {children}
+                      </Typography>
+                    ),
+                    strong: ({ children }) => (
+                      <Typography component="strong" sx={{ fontWeight: 'bold', color: 'inherit' }}>
+                        {children}
+                      </Typography>
+                    ),
+                    code: ({ children, className }) => {
+                      const isInline = !className;
+                      return isInline ? (
+                        <code style={{ 
+                          backgroundColor: 'rgba(0,0,0,0.1)', 
+                          padding: '2px 4px', 
+                          borderRadius: '3px',
+                          fontFamily: 'monospace',
+                          fontSize: '0.9em'
+                        }}>
+                          {children}
+                        </code>
+                      ) : (
+                        <code className={className}>{children}</code>
+                      );
+                    },
+                    blockquote: ({ children }) => (
+                      <Box 
+                        component="blockquote" 
+                        sx={{ 
+                          borderLeft: '4px solid rgba(0,0,0,0.2)', 
+                          pl: 2, 
+                          ml: 0, 
+                          mb: 1,
+                          fontStyle: 'italic',
+                          color: 'inherit'
+                        }}
+                      >
+                        {children}
+                      </Box>
+                    ),
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              ) : (
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {message.content}
+                </Typography>
+              )}
               <Typography 
                 variant="caption" 
                 sx={{ 

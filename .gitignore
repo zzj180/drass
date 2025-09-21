@@ -216,3 +216,16 @@ local_model_qwen3/
 .env.qwen3-mlx
 *.DS_Store
 .DS_Store
+
+# 项目特定忽略文件
+.pids/
+logs/*.pid
+data/chromadb/
+data/audit_logs.db
+data/audit_logs.json
+backup/
+backup_*/
+production/data/
+*.json
+*.log
+*.pid

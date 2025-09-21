@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>系统连接测试</h1>
+    
+    <div class="test-section info">
+        <h3>测试说明</h3>
+        <p>此页面用于测试前端到后端的连接状态</p>
+    </div>
+
+    <div class="test-section">
+        <h3>1. 后端健康检查</h3>
+        <button onclick="testBackendHealth()">测试后端健康状态</button>
+        <div id="health-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. API连接测试</h3>
+        <button onclick="testAPIConnection()">测试API连接</button>
+        <div id="api-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. 聊天功能测试</h3>
+        <button onclick="testChatFunction()">测试聊天功能</button>
+        <div id="chat-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. 完整系统测试</h3>
+        <button onclick="runFullTest()">运行完整测试</button>
+        <div id="full-test-result"></div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:8888';
+        
+        function showResult(elementId, content, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<pre>${content}</pre>`;
+            element.parentElement.className = `test-section ${isSuccess ? 'success' : 'error'}`;
+        }
+
+        async function testBackendHealth() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/health`);
+                const data = await response.json();
+                showResult('health-result', `✅ 后端健康检查通过\n状态: ${data.status}\n服务: ${Object.keys(data.services || {}).join(', ')}`, true);
+            } catch (error) {
+                showResult('health-result', `❌ 后端健康检查失败\n错误: ${error.message}`, false);
+            }
+        }
+
+        async function testAPIConnection() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/test/services-status`);
+                const data = await response.json();
+                showResult('api-result', `✅ API连接测试通过\n状态: ${data.status}\n服务状态: ${JSON.stringify(data.services, null, 2)}`, true);
+            } catch (error) {
+                showResult('api-result', `❌ API连接测试失败\n错误: ${error.message}`, false);
+            }
+        }
+
+        async function testChatFunction() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/test/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: '你好，这是一个连接测试',
+                        use_rag: false,
+                        max_tokens: 100
+                    })
+                });
+                const data = await response.json();
+                showResult('chat-result', `✅ 聊天功能测试通过\n状态: ${data.status}\n响应: ${data.response}`, true);
+            } catch (error) {
+                showResult('chat-result', `❌ 聊天功能测试失败\n错误: ${error.message}`, false);
+            }
+        }
+
+        async function runFullTest() {
+            const results = [];
+            
+            // 测试1: 后端健康检查
+            try {
+                const healthResponse = await fetch(`${BACKEND_URL}/health`);
+                const healthData = await healthResponse.json();
+                results.push(`✅ 后端健康检查: ${healthData.status}`);
+            } catch (error) {
+                results.push(`❌ 后端健康检查: ${error.message}`);
+            }
+
+            // 测试2: API连接
+            try {
+                const apiResponse = await fetch(`${BACKEND_URL}/api/v1/test/services-status`);
+                const apiData = await apiResponse.json();
+                results.push(`✅ API连接: ${apiData.status}`);
+            } catch (error) {
+                results.push(`❌ API连接: ${error.message}`);
+            }
+
+            // 测试3: 聊天功能
+            try {
+                const chatResponse = await fetch(`${BACKEND_URL}/api/v1/test/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: '测试消息',
+                        use_rag: false,
+                        max_tokens: 50
+                    })
+                });
+                const chatData = await chatResponse.json();
+                results.push(`✅ 聊天功能: ${chatData.status}`);
+            } catch (error) {
+                results.push(`❌ 聊天功能: ${error.message}`);
+            }
+
+            const allPassed = results.every(r => r.startsWith('✅'));
+            showResult('full-test-result', results.join('\n'), allPassed);
+        }
+
+        // 页面加载时自动运行健康检查
+        window.onload = function() {
+            testBackendHealth();
+        };
+    </script>
+</body>
+</html>

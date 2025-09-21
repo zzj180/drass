@@ -19,6 +19,22 @@ from app.models.document import (
     StorageLocation,
 )
 
+from app.models.audit_log import (
+    AuditLog,
+    AuditLogBase,
+    AuditLogCreate,
+    AuditLogUpdate,
+    AuditLogResponse,
+    AuditLogSearchRequest,
+    AuditLogSearchResult,
+    AuditLogStatistics,
+    AuditLogDB,
+    AuditLogArchive,
+    AuditEventType,
+    AuditSeverity,
+    AuditStatus,
+)
+
 __all__ = [
     "Document",
     "DocumentBase",
@@ -36,4 +52,17 @@ __all__ = [
     "DocumentStatus",
     "DocumentType",
     "StorageLocation",
+    "AuditLog",
+    "AuditLogBase",
+    "AuditLogCreate",
+    "AuditLogUpdate",
+    "AuditLogResponse",
+    "AuditLogSearchRequest",
+    "AuditLogSearchResult",
+    "AuditLogStatistics",
+    "AuditLogDB",
+    "AuditLogArchive",
+    "AuditEventType",
+    "AuditSeverity",
+    "AuditStatus",
 ]

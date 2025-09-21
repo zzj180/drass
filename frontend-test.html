@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端功能测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>磐石数据合规分析系统 - 前端功能测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 服务状态检查</h2>
+        <button onclick="checkServices()">检查服务状态</button>
+        <div id="service-status"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 用户认证测试</h2>
+        <button onclick="testLogin()">测试登录</button>
+        <div id="login-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 文档管理测试</h2>
+        <button onclick="testDocuments()">获取文档列表</button>
+        <div id="documents-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 聊天功能测试</h2>
+        <button onclick="testChat()">测试聊天API</button>
+        <div id="chat-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. 前端页面访问</h2>
+        <p><a href="http://localhost:5173" target="_blank">主前端页面 (5173端口)</a></p>
+        <p><a href="http://localhost:5174" target="_blank">简单前端页面 (5174端口)</a></p>
+    </div>
+
+    <script>
+        let accessToken = '';
+        
+        async function checkServices() {
+            const statusDiv = document.getElementById('service-status');
+            statusDiv.innerHTML = '<div class="info">检查中...</div>';
+            
+            const services = [
+                { name: '前端服务 (5173)', url: 'http://localhost:5173' },
+                { name: '前端服务 (5174)', url: 'http://localhost:5174' },
+                { name: '后端API', url: 'http://localhost:8888/health' },
+                { name: 'VLLM服务', url: 'http://localhost:8001/v1/models' }
+            ];
+            
+            let results = '<h3>服务状态:</h3>';
+            
+            for (const service of services) {
+                try {
+                    const response = await fetch(service.url, { 
+                        method: 'GET',
+                        headers: service.url.includes('8001') ? { 'Authorization': 'Bearer 123456' } : {}
+                    });
+                    if (response.ok) {
+                        results += `<div class="success">✅ ${service.name}: 正常</div>`;
+                    } else {
+                        results += `<div class="error">❌ ${service.name}: 状态码 ${response.status}</div>`;
+                    }
+                } catch (error) {
+                    results += `<div class="error">❌ ${service.name}: 连接失败</div>`;
+                }
+            }
+            
+            statusDiv.innerHTML = results;
+        }
+        
+        async function testLogin() {
+            const resultDiv = document.getElementById('login-result');
+            resultDiv.innerHTML = '<div class="info">登录中...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'username=test@example.com&password=testpassword123'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    accessToken = data.access_token;
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ 登录成功</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ 登录失败: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 登录错误: ${error.message}</div>`;
+            }
+        }
+        
+        async function testDocuments() {
+            const resultDiv = document.getElementById('documents-result');
+            
+            if (!accessToken) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先登录</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="info">获取文档列表中...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/documents/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ 获取文档列表成功 (${data.length} 个文档)</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ 获取文档失败: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 获取文档错误: ${error.message}</div>`;
+            }
+        }
+        
+        async function testChat() {
+            const resultDiv = document.getElementById('chat-result');
+            resultDiv.innerHTML = '<div class="info">测试聊天中...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8888/api/v1/test/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: '你好，请简单介绍一下数据合规',
+                        use_rag: false,
+                        temperature: 0.7,
+                        max_tokens: 512
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ 聊天测试成功</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ 聊天测试失败: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 聊天测试错误: ${error.message}</div>`;
+            }
+        }
+        
+        // 页面加载时自动检查服务状态
+        window.onload = function() {
+            checkServices();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+
+# 磐石数据合规分析系统备份任务
+# 每天凌晨2点执行日备份
+0 2 * * * /home/qwkj/drass/production/backup-recovery-strategy.sh daily >> /home/qwkj/drass/production/logs/backup.log 2>&1
+
+# 每周日凌晨3点执行周备份
+0 3 * * 0 /home/qwkj/drass/production/backup-recovery-strategy.sh weekly >> /home/qwkj/drass/production/logs/backup.log 2>&1
+
+# 每月1日凌晨4点执行月备份
+0 4 1 * * /home/qwkj/drass/production/backup-recovery-strategy.sh monthly >> /home/qwkj/drass/production/logs/backup.log 2>&1
+
+# 每天凌晨5点清理旧备份
+0 5 * * * /home/qwkj/drass/production/backup-recovery-strategy.sh cleanup >> /home/qwkj/drass/production/logs/backup.log 2>&1
+

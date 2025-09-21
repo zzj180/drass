@@ -1,0 +1,52 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - localhost:9093
+
+scrape_configs:
+  # Prometheus自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 主应用监控
+  - job_name: 'main-app'
+    static_configs:
+      - targets: ['localhost:8888']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # VLLM服务监控
+  - job_name: 'vllm-service'
+    static_configs:
+      - targets: ['localhost:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # 嵌入服务监控
+  - job_name: 'embedding-service'
+    static_configs:
+      - targets: ['localhost:8010']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # 重排序服务监控
+  - job_name: 'reranker-service'
+    static_configs:
+      - targets: ['localhost:8012']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # 系统监控
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+    scrape_interval: 30s

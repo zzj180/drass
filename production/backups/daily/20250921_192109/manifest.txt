@@ -1,0 +1,24 @@
+磐石数据合规分析系统备份清单
+备份类型: 日备份
+备份时间: 2025年 09月 21日 星期日 19:21:09 CST
+备份版本: 1.0.0
+系统版本: Linux omnitek-64gb-mi50 6.8.0-83-generic #83~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Sep  9 18:19:47 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+
+包含内容:
+- 数据库文件 (database.db)
+- 文档数据 (uploads.tar.gz)
+- 向量数据库 (chromadb.tar.gz)
+- 配置文件 (configs.tar.gz)
+- 环境变量 (.env.production)
+
+恢复说明:
+1. 停止所有服务
+2. 恢复数据库文件到 /home/qwkj/drass/data/database.db
+3. 解压文档数据到 /home/qwkj/drass/data/uploads
+4. 解压向量数据库到 /home/qwkj/drass/data/chromadb
+5. 解压配置文件到 /home/qwkj/drass/production/configs
+6. 恢复环境变量文件
+7. 重启服务
+
+备份大小: 720K
+文件数量: 5

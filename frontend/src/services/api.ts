@@ -61,7 +61,7 @@ export const chatAPI = {
       use_rag: useRag ?? false, // 确保默认为false
       context: options?.conversationId,
       temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.maxTokens ?? 1024
+      max_tokens: options?.maxTokens ?? 2048
     });
     return response.data;
   },
@@ -88,7 +88,7 @@ export const chatAPI = {
         use_rag: options?.useRag ?? false, // 默认使用false，直接调用VLLM
         context: options?.conversationId,
         temperature: options?.temperature ?? 0.7, // 传递temperature参数
-        max_tokens: options?.maxTokens ?? 1024 // 增加max_tokens参数，默认1024
+        max_tokens: options?.maxTokens ?? 2048 // 增加max_tokens参数，默认1024
       }),
     });
 

@@ -11,6 +11,7 @@ from app.services.chat_service import chat_service
 from app.services.vector_store import vector_store_service
 from app.services.llm_service import llm_service
 from app.services.embedding_service import embedding_service
+from app.core.performance_config import performance_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ class TestChatRequest(BaseModel):
     context: Optional[str] = Field(None, description="Optional context")
     use_rag: bool = Field(default=True, description="Whether to use RAG")
     temperature: Optional[float] = Field(default=0.7, description="Temperature for generation")
-    max_tokens: Optional[int] = Field(default=4096, description="Maximum tokens to generate")
+    max_tokens: Optional[int] = Field(default=512, description="Maximum tokens to generate")
+    response_type: Optional[str] = Field(default="standard", description="Response type: quick, standard, detailed, analysis")
 
 
 class TestEmbeddingRequest(BaseModel):
@@ -39,35 +41,80 @@ class TestDocumentRequest(BaseModel):
 @router.post("/chat")
 async def test_chat(request: TestChatRequest) -> Dict[str, Any]:
     """
-    Test chat endpoint without authentication
+    Test chat endpoint without authentication with performance optimization
     """
+    import time
+    start_time = time.time()
+    
     try:
         logger.info(f"Test chat request: {request.message[:50]}...")
         
+        # Get performance-optimized configuration
+        perf_config = performance_config.get_config_for_type(request.response_type or "standard")
+        
+        # Calculate optimal parameters
+        optimal_tokens = performance_config.get_optimal_tokens(
+            len(request.message), 
+            request.response_type or "standard"
+        )
+        optimal_timeout = performance_config.get_optimal_timeout(optimal_tokens)
+        
+        # Use provided max_tokens or calculated optimal tokens
+        final_max_tokens = request.max_tokens or optimal_tokens
+        
+        logger.info(f"Performance config - Tokens: {final_max_tokens}, Timeout: {optimal_timeout}s, Type: {request.response_type}")
+        
         if request.use_rag:
-            # Use RAG chain for response
-            result = await chat_service.process_message(
-                message=request.message,
-                session_id="test-session"
+            # Use optimized RAG service
+            from app.services.rag_optimization_service import rag_optimization_service
+            
+            # Initialize if needed
+            if not rag_optimization_service._initialized:
+                await rag_optimization_service.initialize()
+            
+            # Use optimized RAG query
+            result = await rag_optimization_service.optimized_query(
+                query=request.message,
+                response_type=request.response_type or "standard",
+                use_adaptive=True
             )
-            response = result.get("response", "")
+            
+            response = result.get("answer", "")
+            optimization_info = result.get("optimization", {})
         else:
-            # Direct LLM call with provided temperature
+            # Direct LLM call with optimized parameters
             response = await llm_service.generate(
                 prompt=request.message,
-                max_tokens=request.max_tokens or 2048,  # 使用更大的默认token数量
-                temperature=request.temperature
+                max_tokens=final_max_tokens,
+                temperature=request.temperature or perf_config["temperature"]
             )
+            optimization_info = {}
+        
+        end_time = time.time()
+        response_time = end_time - start_time
+        
+        # Log slow requests
+        if performance_config.LOG_SLOW_REQUESTS and response_time > performance_config.SLOW_REQUEST_THRESHOLD:
+            logger.warning(f"Slow request detected: {response_time:.2f}s (threshold: {performance_config.SLOW_REQUEST_THRESHOLD}s)")
         
         return {
             "status": "success",
             "message": request.message,
             "response": response,
-            "used_rag": request.use_rag
+            "used_rag": request.use_rag,
+            "performance": {
+                "response_time": round(response_time, 2),
+                "optimization": optimization_info,
+                "max_tokens": final_max_tokens,
+                "response_type": request.response_type,
+                "timeout_configured": optimal_timeout
+            }
         }
         
     except Exception as e:
-        logger.error(f"Test chat error: {e}")
+        end_time = time.time()
+        response_time = end_time - start_time
+        logger.error(f"Test chat error after {response_time:.2f}s: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

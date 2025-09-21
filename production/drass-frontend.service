@@ -1,0 +1,15 @@
+[Unit]
+Description=DRASS Frontend Application
+After=network.target
+
+[Service]
+Type=simple
+User=qwkj
+WorkingDirectory=/home/qwkj/drass/frontend
+Environment=PATH=/usr/bin:/bin
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5173
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

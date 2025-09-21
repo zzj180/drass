@@ -368,11 +368,16 @@ class UnifiedLLMService:
                     
                     # Update cost tracking
                     if response.usage:
-                        token_usage = TokenUsage(
-                            prompt_tokens=response.usage.get("prompt_tokens", 0),
-                            completion_tokens=response.usage.get("completion_tokens", 0),
-                            total_tokens=response.usage.get("total_tokens", 0)
-                        )
+                        # response.usage is already a TokenUsage object
+                        if isinstance(response.usage, TokenUsage):
+                            token_usage = response.usage
+                        else:
+                            # If it's a dict, convert to TokenUsage
+                            token_usage = TokenUsage(
+                                prompt_tokens=response.usage.get("prompt_tokens", 0),
+                                completion_tokens=response.usage.get("completion_tokens", 0),
+                                total_tokens=response.usage.get("total_tokens", 0)
+                            )
                         cost = provider_instance.estimate_cost(token_usage, response.model)
                         self.total_cost += cost
                         self.cost_by_provider[provider_name] = self.cost_by_provider.get(provider_name, 0) + cost

@@ -46,7 +46,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemaps in production to avoid loading issues
     rollupOptions: {
       output: {
         manualChunks: {
@@ -56,6 +56,10 @@ export default defineConfig({
         },
       },
     },
+  },
+  // Add development-specific configuration
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development'),
   },
   test: {
     globals: true,
